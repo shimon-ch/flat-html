@@ -1,25 +1,31 @@
-# personal-site-design
+# flat-html
 
-個人サイトの設計思想をまとめたリポジトリ。実装はまだない。
+素朴な HTML 部品群のモノレポ。設計段階で、実装はまだない。
 
-- [design-plan.md](./design-plan.md) — 設計思想のたたき台
+| パッケージ | 役割 |
+|---|---|
+| `@flat-html/core` | HTML の解析から変換までを担うツール。展開と集約だけを行う |
+| `@flat-html/vite` | core を Vite に接続する薄い皮 |
+| `@flat-html/css` | class なしで使える CSS |
+| `@flat-html/elements` | ネイティブ優先のコンポーネント |
+| `@flat-html/motion` | アニメーション。枠だけ予約 |
+| `apps/site` | 見本サイト。GitHub Pages に出す。公開パッケージではない |
 
 ## 根底にある問い
 
 > 「これは本当に JS / Custom Element でなければ実現できないのか？」を常に先に問い、答えが No なら足さない。
 
-## 想定する階層
+## 文書
+
+- [docs/design.md](./docs/design.md) — 思想の本文
+- [docs/decisions/](./docs/decisions/) — 決定記録（ADR）。1 件 1 ファイル
+- [docs/glossary.md](./docs/glossary.md) — 用語集
+- [docs/history/](./docs/history/) — 検討の経緯
+
+## 依存の向き
 
 ```
-1. flat-html（HTML 合成ツール, Rust, 自作検討中）… データも reactivity も知らず、静的合成に徹する
-2. コンポーネントライブラリ            … 判断の三軸をコンポーネント単位で適用する層
-3. Web サイト                          … 1 と 2 を組み合わせてページを組む層
+core → css → elements → 消費するサイト
 ```
 
-依存の向きは下から上への一方向。
-
-## 現在の方向性
-
-PostHTML + Vite。ただし PostHTML のエコシステムが小規模なため、Rust による自作ツールを検討中。
-
-HTML 合成ツールの名前は `flat-html` に仮決定（publish 前なので変更可能。理由と却下候補は design-plan.md の命名節）。
+一方向。サイト固有の都合をライブラリやツールへ逆流させない。
