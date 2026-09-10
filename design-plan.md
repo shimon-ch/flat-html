@@ -112,4 +112,23 @@ PostHTMLのエコシステムが小規模・低調気味なため、自作を検
 
 ## 命名
 
-未決定。検討して却下した候補: super-html, fiber-html, bliz-html, bits-html, wonder-html, htm1, hpml, lightning-html, weave-html, splice-html, graft-html, 組む(kumu) 等（いずれも既存プロダクト/ライブラリとの衝突、または本人の好みに合わず）
+**仮決定: `flat-html`**（publish 前なので変更可能。実装が進んで違和感がなければ本採用）
+
+採用理由:
+
+- ツールの動作そのものを指す。ネストしたタグ参照をビルド時に展開して**平坦な HTML にする**
+- 思想も同時に表す。ランタイムの層を重ねない = flat
+- レイヤー1（HTML 合成ツール）の動作を、レイヤー1 の語彙で名付けている
+
+空き状況（確認日 2026-09-10）: npm・crates.io ともに `flat-html` / `flat_html` 空き。crates.io に単体の `flat`（11,669 DL、多次元データを平坦なテキスト平面に投影）は存在するが `flat-*` の兄弟エコシステムはないため、誤認リスクは低い。
+
+### 名前が確定を要するタイミング
+
+`cargo publish` / `npm publish` の時点。それまでは `Cargo.toml` の 1 行で変更できる。crates.io は削除・名前の再利用が不可のため npm より厳しい。
+
+### 検討して却下した候補
+
+- `island-html` — 空きはあるが、アイランドアーキテクチャの本質は選択的ハイドレーション。**レイヤー1 のツールが「知らない」と明言している関心事**であり、レイヤー3 の語彙でレイヤー1 を名付けることになる。npm で見た人は `client:load` 相当のハイドレーション指示子を期待する
+- `twilight-html` — crates.io に `twilight` エコシステム（Discord API ライブラリ群、`twilight-http` / `twilight-gateway` 等）が確立済み。その公式コンポーネントと誤認される
+- `bits-html` — 衝突はない（npm・crates.io ともに空き）が、Rust／システム文脈では「ビット」が第一義。`bits` クレート自体が x86 BMI ビット操作
+- 以前に却下: super-html, fiber-html, bliz-html, wonder-html, htm1, hpml, lightning-html, weave-html, splice-html, graft-html, 組む(kumu) 等（既存プロダクト/ライブラリとの衝突、または本人の好みに合わず）
