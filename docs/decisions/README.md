@@ -24,3 +24,4 @@
 | [0017](./0017-rename-publish-license.md) | 改名は今、公開は見本サイトを出す時点、MIT |
 | [0018](./0018-docs-layout.md) | 文書の置き場 |
 | [0019](./0019-pages-and-layouts.md) | ページは完全な HTML 文書、レイアウトは `<link rel="layout">` |
+| [0020](./0020-vite-plugin.md) | flat-html は Vite プラグインとして作る（0002 の一部を置換） |

@@ -4,8 +4,7 @@
 
 | パッケージ | 役割 |
 |---|---|
-| `@flat-html/core` | HTML の解析から変換までを担うツール。展開と集約だけを行う |
-| `@flat-html/vite` | core を Vite に接続する薄い皮 |
+| `@flat-html/vite` | HTML の解析から変換までを担う Vite プラグイン。展開と集約だけを行う |
 | `@flat-html/css` | class なしで使える CSS |
 | `@flat-html/elements` | ネイティブ優先のコンポーネント |
 | `@flat-html/motion` | アニメーション。枠だけ予約 |
@@ -25,7 +24,7 @@
 ## 依存の向き
 
 ```
-core → css → elements → 消費するサイト
+vite → css → elements → 消費するサイト
 ```
 
 一方向。サイト固有の都合をライブラリやツールへ逆流させない。

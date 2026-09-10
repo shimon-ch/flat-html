@@ -4,8 +4,7 @@ flat-html は「素朴な HTML 部品群」のモノレポである。構成要�
 
 | パッケージ | 役割 |
 |---|---|
-| `@flat-html/core` | HTML の解析から変換までを担うツール。展開と集約だけを行う |
-| `@flat-html/vite` | core を Vite に接続する薄い皮 |
+| `@flat-html/vite` | HTML の解析から変換までを担う Vite プラグイン。展開と集約だけを行う |
 | `@flat-html/css` | class なしで使える CSS |
 | `@flat-html/elements` | ネイティブ優先のコンポーネント |
 | `@flat-html/motion` | アニメーション。枠だけ予約 |
@@ -51,7 +50,7 @@ flat-html は「素朴な HTML 部品群」のモノレポである。構成要�
 
 ブラウザには「タグ名を書くだけで宣言的に展開される」仕組みが存在しない（Declarative Custom Elements は 10 年以上ドラフトのまま）。再利用はビルド時の展開で行い、ブラウザには展開済みの HTML だけを渡す。展開の場所はビルド時でもリクエスト時でもよく、出力は同じ。配布物は「ツールへの入力」であり「ブラウザへの入力」ではない。
 
-flat-html の責務は展開と集約に限る（[ADR-0002](./decisions/0002-flat-html-scope.md)）。記法は HTML が既に持つ語彙を借り、新しい語彙を最小にする。
+flat-html の責務は展開と集約に限る（[ADR-0002](./decisions/0002-flat-html-scope.md)）。Vite プラグインとして作り、展開と集約の本体は純粋関数として内側に置く（[ADR-0020](./decisions/0020-vite-plugin.md)）。記法は HTML が既に持つ語彙を借り、新しい語彙を最小にする。
 
 - 参照はタグ名（[ADR-0010](./decisions/0010-reference-and-props.md)）
 - 差し込みはネイティブの slot と同じ語彙（[ADR-0011](./decisions/0011-slots.md)）
@@ -65,7 +64,7 @@ class なしで使える独立パッケージ。正しい HTML を書けばそ�
 ## 層構造
 
 ```
-1. @flat-html/core     … HTML 合成。データも reactivity も知らず、展開と集約に徹する
+1. @flat-html/vite     … HTML 合成。データも reactivity も知らず、展開と集約に徹する
 2. @flat-html/css      … class なしの CSS
 3. @flat-html/elements … 三軸をコンポーネント単位で適用する層。css に依存する
 4. 消費するサイト       … 1 から 3 を組み合わせてページを組む。このリポジトリでは apps/site（見本）
