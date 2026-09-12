@@ -20,6 +20,7 @@
     "access": "public"
   },
   "scripts": {
+    "test": "vp test",
     "check": "vp check"
   },
   "devDependencies": {
