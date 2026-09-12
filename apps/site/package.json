@@ -1,0 +1,22 @@
+{
+  "name": "site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
+    "check": "vp check"
+  },
+  "dependencies": {
+    "@flat-html/css": "workspace:*",
+    "@flat-html/elements": "workspace:*"
+  },
+  "devDependencies": {
+    "@flat-html/vite": "workspace:*",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

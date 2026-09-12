@@ -2,3 +2,9 @@
 node_modules/
 dist/
 *.log
+*.local
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea
+.claude/worktrees/

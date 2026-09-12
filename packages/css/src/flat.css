@@ -1,0 +1,2 @@
+/* 層の順序はここで一度だけ宣言する（ADR-0005）。消費側は site 層に書けば必ず勝つ。 */
+@layer reset, base, components, site;

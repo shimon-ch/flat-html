@@ -1,0 +1,28 @@
+{
+  "name": "@flat-html/css",
+  "version": "0.0.0",
+  "description": "Class-less CSS. Correct HTML gets styled as-is.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shimon-ch/flat-html.git",
+    "directory": "packages/css"
+  },
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/flat.css",
+    "./*": "./src/*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "check": "vp check"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  }
+}

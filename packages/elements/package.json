@@ -1,0 +1,37 @@
+{
+  "name": "@flat-html/elements",
+  "version": "0.0.0",
+  "description": "Native-first components. Templates, their CSS, and JS only where APG requires it.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shimon-ch/flat-html.git",
+    "directory": "packages/elements"
+  },
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vp test",
+    "check": "vp check"
+  },
+  "dependencies": {
+    "@flat-html/css": "workspace:*"
+  },
+  "devDependencies": {
+    "@flat-html/vite": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "playwright": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
