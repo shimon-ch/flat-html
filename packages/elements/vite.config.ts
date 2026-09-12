@@ -1,8 +1,14 @@
 import { defineConfig } from "vite-plus";
 import { playwright } from "vite-plus/test/browser-playwright";
+import { commands } from "./tests/commands.ts";
 
 export default defineConfig({
-  lint: {},
+  lint: {
+    options: {
+      typeAware: true,
+      typeCheck: true,
+    },
+  },
   fmt: {},
   test: {
     include: ["src/**/*.test.ts"],
@@ -11,6 +17,7 @@ export default defineConfig({
       headless: true,
       provider: playwright(),
       instances: [{ browser: "chromium" }],
+      commands,
     },
   },
 });
