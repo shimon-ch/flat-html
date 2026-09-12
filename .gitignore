@@ -8,3 +8,5 @@ dist/
 !.vscode/extensions.json
 .idea
 .claude/worktrees/
+.vitest-attachments/
+__screenshots__/
