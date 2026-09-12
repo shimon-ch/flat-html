@@ -1,0 +1,50 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # pnpm の版は package.json の devEngines.packageManager から読む
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # vp は vite-plus が node_modules/.bin に置く。curl では入れない
+      - run: pnpm exec vp -C packages/vite pack
+      - run: pnpm exec vp -C apps/site build
+        env:
+          GITHUB_PAGES: "1"
+      # 予算は apps/site/lighthouserc.json（ADR-0021）。staticDistDir はこの作業ディレクトリ（リポジトリ直下）基準
+      - uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: apps/site/lighthouserc.json
+          uploadArtifacts: true
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/site/dist/flat-html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
