@@ -25,3 +25,4 @@
 | [0018](./0018-docs-layout.md) | 文書の置き場 |
 | [0019](./0019-pages-and-layouts.md) | ページは完全な HTML 文書、レイアウトは `<link rel="layout">` |
 | [0020](./0020-vite-plugin.md) | flat-html は Vite プラグインとして作る（0002 の一部を置換） |
+| [0021](./0021-web-vitals.md) | Web Vitals の検査を 2 段階で入れる |
