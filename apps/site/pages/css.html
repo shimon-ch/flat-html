@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <link rel="layout" href="/src/layouts/base.html" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CSS — flat-html</title>
+    <meta name="description" content="@flat-html/css の見本。class を 1 つも書かずに整う" />
+  </head>
+  <body data-page="css">
+    <h1>@flat-html/css</h1>
+    <p>
+      このページの HTML には <code>class</code> 属性が 1 つもない。正しい要素を正しく書けば、
+      <code>@flat-html/css</code> がそのまま整える。明暗は OS の設定に追従する（<code
+        >&lt;meta name="color-scheme" content="light dark"&gt;</code
+      >）。
+    </p>
+
+    <h2>見出しと段落</h2>
+    <h3>三番目の見出し</h3>
+    <p>
+      段落。<a href="https://developer.mozilla.org/ja/docs/Web/HTML">リンク</a
+      >、<strong>強調</strong>、<em>弱い強調</em>、<code>code</code>、<kbd>Ctrl</kbd> +
+      <kbd>K</kbd>、<samp>出力</samp>
+      を含む。
+    </p>
+    <h4>四番目の見出し</h4>
+    <blockquote>
+      <p>引用。左に境界線が付く。</p>
+    </blockquote>
+    <hr />
+
+    <h2>リスト</h2>
+    <ul>
+      <li>順序なし</li>
+      <li>
+        入れ子
+        <ul>
+          <li>二段目</li>
+        </ul>
+      </li>
+    </ul>
+    <ol>
+      <li>順序あり</li>
+      <li>二番目</li>
+    </ol>
+    <dl>
+      <dt>展開</dt>
+      <dd>テンプレートの参照を、ビルド時に完全な HTML へ置き換えること</dd>
+      <dt>集約</dt>
+      <dd>
+        展開後の <code>&lt;link&gt;</code> と <code>&lt;script&gt;</code> を
+        <code>&lt;head&gt;</code> へ移すこと
+      </dd>
+    </dl>
+
+    <h2>表</h2>
+    <table>
+      <caption>
+        トークン
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">名前</th>
+          <th scope="col">既定値</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>--flat-bg</code></td>
+          <td><code>light-dark(#ffffff, #121212)</code></td>
+        </tr>
+        <tr>
+          <td><code>--flat-fg</code></td>
+          <td><code>light-dark(#1a1a1a, #e6e6e6)</code></td>
+        </tr>
+        <tr>
+          <td><code>--flat-accent</code></td>
+          <td><code>light-dark(#0b57d0, #8ab4f8)</code></td>
+        </tr>
+        <tr>
+          <td><code>--flat-space</code></td>
+          <td><code>0.5rem</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>コード</h2>
+    <pre><code>@layer site {
+  :root {
+    --flat-accent: rebeccapurple;
+  }
+}</code></pre>
+
+    <h2>フォーム部品</h2>
+    <form action="#" method="get">
+      <fieldset>
+        <legend>入力</legend>
+        <p>
+          <label for="name">名前</label>
+          <input id="name" name="name" type="text" placeholder="山田 花子" required />
+        </p>
+        <p>
+          <label for="email">メール</label>
+          <input id="email" name="email" type="email" placeholder="hanako@example.com" />
+        </p>
+        <p>
+          <label for="plan">プラン</label>
+          <select id="plan" name="plan">
+            <option>無料</option>
+            <option>有料</option>
+          </select>
+        </p>
+        <p>
+          <label for="note">備考</label>
+          <textarea id="note" name="note"></textarea>
+        </p>
+        <p>
+          <label for="volume">音量</label>
+          <input id="volume" name="volume" type="range" min="0" max="100" />
+        </p>
+        <p>
+          <label><input name="agree" type="checkbox" /> 規約に同意する</label>
+        </p>
+        <p>
+          <label><input name="scheme" type="radio" value="light" checked /> 明</label>
+          <label><input name="scheme" type="radio" value="dark" /> 暗</label>
+        </p>
+        <p>
+          <label for="locked">無効</label>
+          <input id="locked" name="locked" type="text" value="編集できない" disabled />
+        </p>
+      </fieldset>
+      <p>
+        <button type="submit" data-variant="primary">送信</button>
+        <button type="reset">取り消す</button>
+        <button type="button" aria-pressed="true">押された状態</button>
+        <button type="button" disabled>無効</button>
+      </p>
+    </form>
+
+    <h2>details</h2>
+    <p>
+      同じ <code>name</code> を持つ <code>&lt;details&gt;</code> は排他的に開く。JS は使っていない。
+    </p>
+    <details name="faq">
+      <summary>class なしで本当に足りるのか</summary>
+      <p>
+        要素と ARIA 状態に当てると、スタイルがマークアップの正しさを検証する側に回る。<code
+          >aria-selected</code
+        >
+        を書き忘れれば見た目も変わらない。
+      </p>
+    </details>
+    <details name="faq">
+      <summary>見た目を変えたいときは</summary>
+      <p>
+        <code>site</code> 層に書く。層の順序は <code>@flat-html/css</code>
+        が固定していて、後の層が必ず勝つ。
+      </p>
+    </details>
+    <details name="faq">
+      <summary>変種はどう表すか</summary>
+      <p><code>button[data-variant="primary"]</code> のように data 属性で表す。</p>
+    </details>
+
+    <h2>dialog</h2>
+    <p>
+      Invoker Commands（<code>commandfor</code> と <code>command</code>）で開く。JS は使っていない。
+    </p>
+    <p>
+      <button type="button" commandfor="demo-dialog" command="show-modal">ダイアログを開く</button>
+    </p>
+    <dialog id="demo-dialog">
+      <h3>ダイアログ</h3>
+      <p>背景が暗くなり、フォーカスがここに閉じ込められる。<kbd>Esc</kbd> でも閉じる。</p>
+      <p>
+        <button type="button" commandfor="demo-dialog" command="close" data-variant="primary">
+          閉じる
+        </button>
+      </p>
+    </dialog>
+
+    <h2>popover</h2>
+    <p><code>popovertarget</code> で開く。外側を押すか <kbd>Esc</kbd> で閉じる。</p>
+    <p>
+      <button type="button" popovertarget="demo-popover">ポップオーバーを開く</button>
+    </p>
+    <div id="demo-popover" popover>
+      <p>ポップオーバー。最上層に描かれ、モーダルではない。</p>
+    </div>
+  </body>
+</html>
