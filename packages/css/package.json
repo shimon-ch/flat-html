@@ -23,6 +23,7 @@
     "check": "vp check"
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }
