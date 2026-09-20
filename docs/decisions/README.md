@@ -26,3 +26,5 @@
 | [0019](./0019-pages-and-layouts.md) | ページは完全な HTML 文書、レイアウトは `<link rel="layout">` |
 | [0020](./0020-vite-plugin.md) | flat-html は Vite プラグインとして作る（0002 の一部を置換） |
 | [0021](./0021-web-vitals.md) | Web Vitals の検査を 2 段階で入れる |
+| [0022](./0022-color-scheme-control.md) | 明暗の切り替えは 3 状態のラジオグループ（0014 の一部を置換） |
+| [0023](./0023-notation-details.md) | 記法の細目（実装で確定した解釈） |
