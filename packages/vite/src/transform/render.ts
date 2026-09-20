@@ -100,7 +100,9 @@ function renderDirective(el: Template, scope: Scope, path: string | undefined): 
   if (html !== undefined) {
     const raw = stringify(evalIn(html, scope, el, path));
     const parent = el.parentNode;
-    const fragment = parent && isElement(parent) ? parseFragment(parent, raw) : parseFragment(raw);
+    // 文脈つきで解析する。`<table>` の中の `<tr>` のように、親によって解析結果が変わるため
+    const fragment =
+      parent && isElement(parent) ? parseFragment(parent, raw, {}) : parseFragment(raw);
     replaceWith(el, childrenOf(fragment));
     return;
   }
