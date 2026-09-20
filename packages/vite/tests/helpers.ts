@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 import { transform, type TransformOptions, type TransformResult } from "../src/index.ts";
 
 /** テンプレート名 → HTML の表からテンプレートを解決する。 */
@@ -14,6 +15,27 @@ export function layouts(
 ): NonNullable<TransformOptions["resolveLayout"]> {
   return (href) =>
     Promise.resolve(href in table ? { path: `layouts/${href}`, source: table[href]! } : null);
+}
+
+/**
+ * 資産の解決を記録する `resolveAsset`。相対指定子は `fromPath` のディレクトリと繋いで `/fs/` の下に、
+ * パッケージ名の指定子は `/pkg/` の下に置く。
+ */
+export function assetResolver(): {
+  calls: Array<{ specifier: string; fromPath: string }>;
+  resolveAsset: NonNullable<TransformOptions["resolveAsset"]>;
+} {
+  const calls: Array<{ specifier: string; fromPath: string }> = [];
+  return {
+    calls,
+    resolveAsset(specifier, fromPath) {
+      calls.push({ specifier, fromPath });
+      const url = specifier.startsWith(".")
+        ? `/fs/${posix.join(posix.dirname(fromPath), specifier)}`
+        : `/pkg/${specifier}`;
+      return Promise.resolve(url);
+    },
+  };
 }
 
 /** 断片を変換し、HTML を返す。 */

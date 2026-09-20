@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import type { TemplateSource } from "./transform/index.ts";
 
@@ -41,4 +42,33 @@ export function resolveLayoutFile(
     ? path.join(projectRoot, href)
     : path.resolve(path.dirname(fromPath), href);
   return readIfExists(file);
+}
+
+async function exists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * テンプレートやレイアウトに書かれた資産の指定子を、そのファイル `fromPath` の位置を基準に実ファイルへ解決する。
+ * `./` `../` で始まる相対パスはファイルシステムで、それ以外（`@scope/pkg/path`、`pkg/path`）は
+ * `fromPath` から見た Node の解決規則で探す。見つからなければ null。
+ */
+export async function resolveAssetFile(
+  fromPath: string,
+  specifier: string,
+): Promise<string | null> {
+  if (specifier.startsWith("./") || specifier.startsWith("../")) {
+    const file = path.resolve(path.dirname(fromPath), specifier);
+    return (await exists(file)) ? file : null;
+  }
+  try {
+    return createRequire(fromPath).resolve(specifier);
+  } catch {
+    return null;
+  }
 }

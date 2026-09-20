@@ -1,4 +1,5 @@
 import { parse } from "parse5";
+import { resolveAssetUrls } from "./assets.ts";
 import {
   append,
   childrenOf,
@@ -110,6 +111,7 @@ export async function applyLayouts(
     visited.add(source.path);
     layouts.push({ href, path: source.path });
     const layout = parse(source.source, { sourceCodeLocationInfo: true });
+    if (options.resolveAsset) await resolveAssetUrls(layout, source.path, options.resolveAsset);
     current = merge(current, currentPath, layout, source.path);
     currentPath = source.path;
   }
