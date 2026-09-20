@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <link rel="layout" href="/src/layouts/base.html" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>color-scheme — flat-html</title>
+    <meta
+      name="description"
+      content="@flat-html/elements の明暗切り替え要素。JS なしで 3 状態を選べる"
+    />
+  </head>
+  <body>
+    <flat-site-nav slot="nav" current="color-scheme" base="{{ base }}"></flat-site-nav>
+    <h1>color-scheme</h1>
+    <p>
+      ページの配色を「自動 / 明 / 暗」から選ぶ要素。選択の反映は
+      <code>:root:has(:checked)</code> と <code>color-scheme</code> だけで動き、JS は使わない。JS
+      は選択の保存と次のページへの引き継ぎだけを足す。
+    </p>
+
+    <flat-color-scheme></flat-color-scheme>
+
+    <p>
+      「自動」は OS の設定に従う。下の見本はどれも
+      <code>@flat-html/css</code> のトークンだけで色が付いていて、<code>color-scheme</code>
+      を切り替えると <code>light-dark()</code> がそのまま追従する。
+    </p>
+
+    <h2>見出しと本文</h2>
+    <p>
+      段落の中に <a href="https://developer.mozilla.org/ja/docs/Web/CSS/color-scheme">リンク</a> と
+      <code>code</code>、<kbd>Ctrl</kbd> + <kbd>K</kbd> を置いた行。
+    </p>
+    <blockquote>
+      <p>引用。境界線の色も明暗で入れ替わる。</p>
+    </blockquote>
+
+    <h2>表</h2>
+    <table>
+      <caption>
+        配色の選択肢
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">値</th>
+          <th scope="col">結果の <code>color-scheme</code></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>system</code></td>
+          <td><code>light dark</code>（OS の設定に従う）</td>
+        </tr>
+        <tr>
+          <td><code>light</code></td>
+          <td><code>light</code></td>
+        </tr>
+        <tr>
+          <td><code>dark</code></td>
+          <td><code>dark</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>フォーム部品</h2>
+    <p>ブラウザが描く部品（枠、キャレット、スクロールバー）も <code>color-scheme</code> に従う。</p>
+    <form action="#" method="get">
+      <fieldset>
+        <legend>入力</legend>
+        <p>
+          <label for="demo-name">名前</label>
+          <input id="demo-name" name="name" type="text" placeholder="山田 花子" />
+        </p>
+        <p>
+          <label for="demo-plan">プラン</label>
+          <select id="demo-plan" name="plan">
+            <option>無料</option>
+            <option>有料</option>
+          </select>
+        </p>
+      </fieldset>
+      <p>
+        <button type="submit" data-variant="primary">送信</button>
+        <button type="reset">取り消す</button>
+      </p>
+    </form>
+
+    <h2>使い方</h2>
+    <pre><code>&lt;flat-color-scheme&gt;&lt;/flat-color-scheme&gt;</code></pre>
+    <p>
+      文言は <code>slot</code> で差し替える。1 ページに 1 つだけ置く（同じ
+      <code>name</code> のラジオが 2 組になると、選択が片方にしか残らない）。
+    </p>
+  </body>
+</html>

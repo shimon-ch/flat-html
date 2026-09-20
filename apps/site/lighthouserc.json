@@ -2,7 +2,11 @@
   "ci": {
     "collect": {
       "staticDistDir": "apps/site/dist",
-      "url": ["/flat-html/index.html", "/flat-html/pages/css.html"]
+      "url": [
+        "/flat-html/index.html",
+        "/flat-html/pages/css.html",
+        "/flat-html/pages/color-scheme.html"
+      ]
     },
     "assert": {
       "assertions": {
