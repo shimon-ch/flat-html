@@ -62,7 +62,6 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
       order: "pre",
       async handler(html, ctx) {
         const roots = options.roots.map((r) => path.resolve(config.root, r));
-        const assets: string[] = [];
         const result = await transform(html, {
           path: ctx.filename,
           data: options.data,
@@ -71,9 +70,7 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
             resolveLayoutFile(config.root, fromPath ?? ctx.filename, href),
           resolveAsset: async (specifier, fromPath) => {
             const file = await resolveAssetFile(fromPath, specifier);
-            if (file === null) return null;
-            assets.push(file);
-            return assetUrl(file);
+            return file === null ? null : assetUrl(file);
           },
         });
 
@@ -84,8 +81,9 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
             logged.add(line);
             config.logger.info(`[flat-html] ${line}`);
           }
-          const files = [...result.layouts, ...result.resolved].map((r) => r.path).concat(assets);
-          for (const file of files) {
+          // 資産そのものは監視しない。中身が変わっても書き出す URL は変わらず、
+          // 資産の更新は Vite の HMR が扱う。ここで全体再読み込みを出すと CSS の差し替えを潰す
+          for (const file of [...result.layouts, ...result.resolved].map((r) => r.path)) {
             if (watched.has(file)) continue;
             watched.add(file);
             server.watcher.add(file);
