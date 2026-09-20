@@ -7,7 +7,8 @@
     <title>flat-html — 素朴な HTML 部品群</title>
     <meta name="description" content="標準が持つものを使い、必要が出るまで足さない HTML 部品群" />
   </head>
-  <body data-page="home">
+  <body>
+    <flat-site-nav slot="nav" current="home" base="{{ base }}"></flat-site-nav>
     <h1>flat-html</h1>
     <p>
       素朴な HTML 部品群のモノレポ。ブラウザが既に持つ要素と CSS

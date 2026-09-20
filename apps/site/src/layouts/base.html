@@ -10,7 +10,8 @@
   <body>
     <header>
       <p><a href="{{ base }}">flat-html</a></p>
-      <flat-site-nav base="{{ base }}"></flat-site-nav>
+      <!-- 現在位置はページが渡す。差し込みがなければ現在位置なしの一覧になる（ADR-0011） -->
+      <slot name="nav"><flat-site-nav base="{{ base }}"></flat-site-nav></slot>
     </header>
     <main><slot></slot></main>
     <footer>
