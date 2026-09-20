@@ -1,0 +1,12 @@
+/* クラスセレクタ禁止（ADR-0005）。層の順序は flat.css が宣言済みなので components 層へ入れるだけにする。
+   選ばれた値で :root の color-scheme を上書きし、色は tokens.css の light-dark() に追従させる（ADR-0014）。
+   value="system" に規則がないのは、tokens.css の :root { color-scheme: light dark } がそのまま既定になるため。 */
+@layer components {
+  :root:has(input[name="flat-color-scheme"][value="light"]:checked) {
+    color-scheme: light;
+  }
+
+  :root:has(input[name="flat-color-scheme"][value="dark"]:checked) {
+    color-scheme: dark;
+  }
+}

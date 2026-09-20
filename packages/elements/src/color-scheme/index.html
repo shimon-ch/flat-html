@@ -1,0 +1,17 @@
+<link rel="stylesheet" href="@flat-html/elements/color-scheme/index.css" />
+<script type="module" src="@flat-html/elements/color-scheme/index.js"></script>
+<fieldset>
+  <legend><slot name="legend">配色</slot></legend>
+  <label>
+    <input type="radio" name="flat-color-scheme" value="system" checked />
+    <slot name="system">自動</slot>
+  </label>
+  <label>
+    <input type="radio" name="flat-color-scheme" value="light" />
+    <slot name="light">明</slot>
+  </label>
+  <label>
+    <input type="radio" name="flat-color-scheme" value="dark" />
+    <slot name="dark">暗</slot>
+  </label>
+</fieldset>
