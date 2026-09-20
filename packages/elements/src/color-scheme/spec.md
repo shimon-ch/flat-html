@@ -35,8 +35,8 @@ ADR-0014 は「基礎は `<input type="checkbox" switch>` と `:root:has(:checke
 ## テンプレート
 
 ```html
-<link rel="stylesheet" href="@flat-html/elements/color-scheme/index.css" />
-<script type="module" src="@flat-html/elements/color-scheme/index.js"></script>
+<link rel="stylesheet" href="./index.css" />
+<script type="module" src="./index.js"></script>
 <fieldset>
   <legend><slot name="legend">配色</slot></legend>
   <label>

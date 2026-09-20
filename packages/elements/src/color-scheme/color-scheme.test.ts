@@ -3,7 +3,7 @@ import { userEvent } from "vite-plus/test/browser";
 import { assetBytes, expand, layoutShiftOf, render, squash } from "../../tests/browser.ts";
 import "./index.css";
 
-/** 固有資産のバイト上限（ADR-0021）。実測は index.css 633 / index.js 1487 バイト */
+/** 固有資産のバイト上限（ADR-0021）。実測は index.css 867 / index.js 1487 バイト */
 const CSS_LIMIT = 1024;
 const JS_LIMIT = 2048;
 
@@ -61,8 +61,8 @@ describe("構造", () => {
   test("出力の根は <fieldset data-flat=color-scheme> で、参照名 flat-color-scheme は残らない", async () => {
     const html = await expand(usage);
     expect(squash(html)).toBe(
-      '<link rel="stylesheet" href="@flat-html/elements/color-scheme/index.css">' +
-        '<script type="module" src="@flat-html/elements/color-scheme/index.js"></script>' +
+      '<link rel="stylesheet" href="./index.css">' +
+        '<script type="module" src="./index.js"></script>' +
         '<fieldset data-flat="color-scheme"><legend>配色</legend>' +
         '<label><input type="radio" name="flat-color-scheme" value="system" checked=""> 自動 </label>' +
         '<label><input type="radio" name="flat-color-scheme" value="light"> 明 </label>' +
