@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vp -C packages/vite pack
+      - run: pnpm exec vp check
+      # vp check は lint.options.typeCheck を効かせない（issue #8）。型検査は tsc で担保する
+      - run: pnpm exec tsc -p packages/vite/tsconfig.json --noEmit
+      - run: pnpm exec tsc -p packages/elements/tsconfig.json --noEmit
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec vp run -r test
+      - run: pnpm exec vp -C apps/site build
