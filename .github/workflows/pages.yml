@@ -6,8 +6,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -29,7 +27,8 @@ jobs:
       - run: pnpm exec vp -C packages/vite pack
       - run: pnpm exec vp -C apps/site build
         env:
-          GITHUB_PAGES: "1"
+          # 公開用リポジトリ flat-html-site の Pages の配信パス（ADR-0026）
+          SITE_BASE: /flat-html-site/
       # 予算は apps/site/lighthouserc.json（ADR-0021）。staticDistDir はこの作業ディレクトリ（リポジトリ直下）基準
       - uses: treosh/lighthouse-ci-action@v12
         with:
@@ -37,18 +36,23 @@ jobs:
           # 1 回だけだと起動直後の計測が実行機の混み具合を拾って判定がぶれる。3 回測り中央値で判定する（ADR-0021）
           runs: 3
           uploadArtifacts: true
-      - uses: actions/upload-pages-artifact@v5
+      # ここから配信。ソースを非公開に保つため、ビルド済みのファイルだけを公開用リポジトリへ送る（ADR-0026）。
+      # 公開用リポジトリへの書き込み鍵を秘密情報 SITE_DEPLOY_KEY に登録し、リポジトリ変数 PAGES_DEPLOY を true にすると動く
+      - uses: actions/checkout@v7
+        if: vars.PAGES_DEPLOY == 'true'
         with:
-          path: apps/site/dist/flat-html
-
-  deploy:
-    needs: build
-    # 公開を保留している間は配信しない（ADR-0025）。リポジトリ変数 PAGES_DEPLOY を true にすると再開する
-    if: vars.PAGES_DEPLOY == 'true'
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+          repository: shimon-ch/flat-html-site
+          ssh-key: ${{ secrets.SITE_DEPLOY_KEY }}
+          path: site-repo
+      - name: 公開用リポジトリへ配信する
+        if: vars.PAGES_DEPLOY == 'true'
+        run: |
+          rsync -a --delete --exclude .git apps/site/dist/flat-html-site/ site-repo/
+          touch site-repo/.nojekyll
+          cd site-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
+          git commit -m "deploy ${GITHUB_SHA::7}"
+          git push
