@@ -1,0 +1,8 @@
+{
+  "name": "@flat-html/motion",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reserved. Animation helpers built only on what CSS standards cannot do (ADR-0006).",
+  "license": "MIT",
+  "type": "module"
+}
