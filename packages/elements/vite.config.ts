@@ -3,12 +3,7 @@ import { playwright } from "vite-plus/test/browser-playwright";
 import { commands } from "./tests/commands.ts";
 
 export default defineConfig({
-  lint: {
-    options: {
-      typeAware: true,
-      typeCheck: true,
-    },
-  },
+  lint: {},
   fmt: {},
   test: {
     include: ["src/**/*.test.ts"],

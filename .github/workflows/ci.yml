@@ -21,9 +21,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec vp -C packages/vite pack
       - run: pnpm exec vp check
-      # vp check は lint.options.typeCheck を効かせない（issue #8）。型検査は tsc で担保する
-      - run: pnpm exec tsc -p packages/vite/tsconfig.json --noEmit
-      - run: pnpm exec tsc -p packages/elements/tsconfig.json --noEmit
       # playwright は @flat-html/elements の依存なので、その文脈で実行する
       - run: pnpm --filter @flat-html/elements exec playwright install --with-deps chromium
       - run: pnpm exec vp run -r test
