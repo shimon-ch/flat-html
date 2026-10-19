@@ -1,0 +1,337 @@
+/* クラスセレクタ禁止。要素と ARIA 状態に当て、変種は data-* だけで表す（ADR-0005）。 */
+html {
+  font-family: var(--flat-font);
+  font-size: var(--flat-font-size);
+  line-height: var(--flat-line-height);
+  background: var(--flat-bg);
+  color: var(--flat-fg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  line-height: 1.25;
+  margin-block: calc(var(--flat-space) * 3) var(--flat-space);
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: 2em;
+}
+
+h2 {
+  font-size: 1.5em;
+}
+
+h3 {
+  font-size: 1.25em;
+}
+
+h4,
+h5,
+h6 {
+  font-size: 1em;
+}
+
+p,
+ul,
+ol,
+dl,
+pre,
+table,
+blockquote,
+figure,
+details,
+fieldset {
+  margin-block: 0 calc(var(--flat-space) * 2);
+}
+
+a {
+  color: var(--flat-accent);
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+ul,
+ol {
+  padding-inline-start: calc(var(--flat-space) * 3);
+}
+
+li + li {
+  margin-block-start: calc(var(--flat-space) / 2);
+}
+
+dt {
+  font-weight: bold;
+}
+
+dd {
+  margin-inline-start: calc(var(--flat-space) * 3);
+}
+
+hr {
+  border: 0;
+  border-block-start: 1px solid var(--flat-border);
+  margin-block: calc(var(--flat-space) * 3);
+}
+
+blockquote {
+  border-inline-start: 3px solid var(--flat-border);
+  padding-inline-start: calc(var(--flat-space) * 2);
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+code,
+kbd,
+samp {
+  padding: 0.1em 0.3em;
+  border-radius: var(--flat-radius);
+  background: color-mix(in srgb, var(--flat-fg) 8%, transparent);
+}
+
+kbd {
+  border: 1px solid var(--flat-border);
+  border-block-end-width: 2px;
+}
+
+pre {
+  padding: calc(var(--flat-space) * 2);
+  border-radius: var(--flat-radius);
+  background: color-mix(in srgb, var(--flat-fg) 8%, transparent);
+  overflow-x: auto;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: start;
+  padding: var(--flat-space) calc(var(--flat-space) * 1.5);
+  border-block-end: 1px solid var(--flat-border);
+}
+
+th {
+  font-weight: bold;
+}
+
+caption {
+  text-align: start;
+  font-weight: bold;
+  margin-block-end: var(--flat-space);
+}
+
+fieldset {
+  border: 1px solid var(--flat-border);
+  border-radius: var(--flat-radius);
+  padding: calc(var(--flat-space) * 2);
+}
+
+legend {
+  padding-inline: var(--flat-space);
+}
+
+label {
+  display: inline-block;
+  margin-block-end: calc(var(--flat-space) / 2);
+}
+
+input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]),
+select,
+textarea {
+  display: block;
+  width: 100%;
+  padding: var(--flat-space) calc(var(--flat-space) * 1.5);
+  border: 1px solid var(--flat-border);
+  border-radius: var(--flat-radius);
+  background: var(--flat-bg);
+}
+
+textarea {
+  resize: vertical;
+  min-height: calc(var(--flat-space) * 12);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input:user-invalid,
+select:user-invalid,
+textarea:user-invalid {
+  border-color: light-dark(#b3261e, #f2b8b5);
+}
+
+button,
+input[type="submit"],
+input[type="button"],
+input[type="reset"] {
+  display: inline-block;
+  width: auto;
+  padding: var(--flat-space) calc(var(--flat-space) * 2);
+  border: 1px solid var(--flat-border);
+  border-radius: var(--flat-radius);
+  background: color-mix(in srgb, var(--flat-fg) 6%, var(--flat-bg));
+  cursor: pointer;
+}
+
+button[data-variant="primary"] {
+  border-color: var(--flat-accent);
+  background: var(--flat-accent);
+  color: var(--flat-bg);
+}
+
+button[aria-pressed="true"],
+button[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--flat-accent) 20%, var(--flat-bg));
+}
+
+:focus-visible {
+  outline: 2px solid var(--flat-accent);
+  outline-offset: 2px;
+}
+
+details {
+  border: 1px solid var(--flat-border);
+  border-radius: var(--flat-radius);
+}
+
+details[name] + details[name] {
+  margin-block-start: calc(var(--flat-space) * -2 + 1px);
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+}
+
+details[name]:has(+ details[name]) {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+summary {
+  padding: var(--flat-space) calc(var(--flat-space) * 2);
+  cursor: pointer;
+  font-weight: bold;
+}
+
+details[open] > summary {
+  border-block-end: 1px solid var(--flat-border);
+}
+
+details > :not(summary) {
+  padding-inline: calc(var(--flat-space) * 2);
+}
+
+details > summary + :not(summary) {
+  padding-block-start: calc(var(--flat-space) * 2);
+}
+
+details > :last-child:not(summary) {
+  margin-block-end: 0;
+  padding-block-end: calc(var(--flat-space) * 2);
+}
+
+details::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition:
+    block-size 0.2s ease,
+    content-visibility 0.2s allow-discrete;
+}
+
+details[open]::details-content {
+  block-size: auto;
+  block-size: calc-size(auto, size);
+}
+
+dialog,
+[popover] {
+  border: 1px solid var(--flat-border);
+  border-radius: var(--flat-radius);
+  padding: calc(var(--flat-space) * 3);
+  background: var(--flat-bg);
+  color: var(--flat-fg);
+  max-inline-size: min(60ch, 100% - var(--flat-space) * 4);
+  opacity: 0;
+  translate: 0 calc(var(--flat-space) * -1);
+  transition:
+    opacity 0.2s ease,
+    translate 0.2s ease,
+    overlay 0.2s allow-discrete,
+    display 0.2s allow-discrete;
+}
+
+dialog[open],
+[popover]:popover-open {
+  opacity: 1;
+  translate: 0 0;
+}
+
+@starting-style {
+  dialog[open],
+  [popover]:popover-open {
+    opacity: 0;
+    translate: 0 calc(var(--flat-space) * -1);
+  }
+}
+
+dialog::backdrop {
+  background: light-dark(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.6));
+  transition:
+    background 0.2s ease,
+    overlay 0.2s allow-discrete,
+    display 0.2s allow-discrete;
+}
+
+@starting-style {
+  dialog[open]::backdrop {
+    background: rgb(0 0 0 / 0);
+  }
+}
+
+[role="tab"][aria-selected="true"] {
+  color: var(--flat-accent);
+  box-shadow: inset 0 -2px 0 var(--flat-accent);
+}
+
+[aria-current="page"] {
+  font-weight: bold;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  details::details-content,
+  dialog,
+  dialog::backdrop,
+  [popover] {
+    transition: none;
+  }
+}

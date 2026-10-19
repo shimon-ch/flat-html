@@ -1,0 +1,16 @@
+/* トークンは --flat-* のみ。明暗は light-dark() で 1 定義にまとめ、prefers-color-scheme は書かない（ADR-0014）。 */
+:root {
+  color-scheme: light dark;
+
+  --flat-bg: light-dark(#ffffff, #121212);
+  --flat-fg: light-dark(#1a1a1a, #e6e6e6);
+  --flat-accent: light-dark(#0b57d0, #8ab4f8);
+  --flat-border: light-dark(#c8c8c8, #444444);
+
+  --flat-space: 0.5rem;
+  --flat-radius: 0.25rem;
+
+  --flat-font: system-ui, sans-serif;
+  --flat-font-size: 1rem;
+  --flat-line-height: 1.6;
+}
