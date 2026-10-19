@@ -170,6 +170,9 @@ catalogs:
     '@vitest/browser-playwright':
       specifier: 5.0.5
       version: 5.0.5
+    lightningcss:
+      specifier: ^1.33.0
+      version: 1.33.0
     parse5:
       specifier: ^8.0.1
       version: 8.0.1
@@ -208,7 +211,7 @@ importers:
         version: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2)'
       vite-plus:
         specifier: 'catalog:'
-        version: 1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
+        version: 1.3.0(@types/node@24.13.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
 
   apps/site:
     dependencies:
@@ -230,7 +233,7 @@ importers:
         version: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2)'
       vite-plus:
         specifier: 'catalog:'
-        version: 1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
+        version: 1.3.0(@types/node@24.13.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
 
   packages/css:
     devDependencies:
@@ -239,7 +242,7 @@ importers:
         version: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2)'
       vite-plus:
         specifier: 'catalog:'
-        version: 1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
+        version: 1.3.0(@types/node@24.13.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
 
   packages/elements:
     dependencies:
@@ -256,6 +259,9 @@ importers:
       '@vitest/browser-playwright':
         specifier: 'catalog:'
         version: 5.0.5(@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2))(playwright@1.64.1)(vitest@5.0.5)
+      lightningcss:
+        specifier: 'catalog:'
+        version: 1.33.0
       playwright:
         specifier: 'catalog:'
         version: 1.64.1
@@ -291,7 +297,7 @@ importers:
         version: 7.0.2
       vite-plus:
         specifier: 'catalog:'
-        version: 1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
+        version: 1.3.0(@types/node@24.13.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
 
 packages:
 
@@ -1892,31 +1898,6 @@ snapshots:
       '@oxfmt/binding-win32-x64-msvc': 0.73.0
       vite-plus: 1.3.0(@types/node@24.13.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
 
-  oxfmt@0.73.0(vite-plus@1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)):
-    dependencies:
-      tinypool: 2.2.0
-    optionalDependencies:
-      '@oxfmt/binding-android-arm-eabi': 0.73.0
-      '@oxfmt/binding-android-arm64': 0.73.0
-      '@oxfmt/binding-darwin-arm64': 0.73.0
-      '@oxfmt/binding-darwin-x64': 0.73.0
-      '@oxfmt/binding-freebsd-x64': 0.73.0
-      '@oxfmt/binding-linux-arm-gnueabihf': 0.73.0
-      '@oxfmt/binding-linux-arm-musleabihf': 0.73.0
-      '@oxfmt/binding-linux-arm64-gnu': 0.73.0
-      '@oxfmt/binding-linux-arm64-musl': 0.73.0
-      '@oxfmt/binding-linux-ppc64-gnu': 0.73.0
-      '@oxfmt/binding-linux-riscv64-gnu': 0.73.0
-      '@oxfmt/binding-linux-riscv64-musl': 0.73.0
-      '@oxfmt/binding-linux-s390x-gnu': 0.73.0
-      '@oxfmt/binding-linux-x64-gnu': 0.73.0
-      '@oxfmt/binding-linux-x64-musl': 0.73.0
-      '@oxfmt/binding-openharmony-arm64': 0.73.0
-      '@oxfmt/binding-win32-arm64-msvc': 0.73.0
-      '@oxfmt/binding-win32-ia32-msvc': 0.73.0
-      '@oxfmt/binding-win32-x64-msvc': 0.73.0
-      vite-plus: 1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
-
   oxlint-tsgolint@7.0.2004:
     optionalDependencies:
       '@oxlint-tsgolint/darwin-arm64': 7.0.2004
@@ -1949,30 +1930,6 @@ snapshots:
       '@oxlint/binding-win32-x64-msvc': 1.88.0
       oxlint-tsgolint: 7.0.2004
       vite-plus: 1.3.0(@types/node@24.13.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
-
-  oxlint@1.88.0(oxlint-tsgolint@7.0.2004)(vite-plus@1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)):
-    optionalDependencies:
-      '@oxlint/binding-android-arm-eabi': 1.88.0
-      '@oxlint/binding-android-arm64': 1.88.0
-      '@oxlint/binding-darwin-arm64': 1.88.0
-      '@oxlint/binding-darwin-x64': 1.88.0
-      '@oxlint/binding-freebsd-x64': 1.88.0
-      '@oxlint/binding-linux-arm-gnueabihf': 1.88.0
-      '@oxlint/binding-linux-arm-musleabihf': 1.88.0
-      '@oxlint/binding-linux-arm64-gnu': 1.88.0
-      '@oxlint/binding-linux-arm64-musl': 1.88.0
-      '@oxlint/binding-linux-ppc64-gnu': 1.88.0
-      '@oxlint/binding-linux-riscv64-gnu': 1.88.0
-      '@oxlint/binding-linux-riscv64-musl': 1.88.0
-      '@oxlint/binding-linux-s390x-gnu': 1.88.0
-      '@oxlint/binding-linux-x64-gnu': 1.88.0
-      '@oxlint/binding-linux-x64-musl': 1.88.0
-      '@oxlint/binding-openharmony-arm64': 1.88.0
-      '@oxlint/binding-win32-arm64-msvc': 1.88.0
-      '@oxlint/binding-win32-ia32-msvc': 1.88.0
-      '@oxlint/binding-win32-x64-msvc': 1.88.0
-      oxlint-tsgolint: 7.0.2004
-      vite-plus: 1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2)
 
   parse5@8.0.1:
     dependencies:
@@ -2074,67 +2031,6 @@ snapshots:
       vitest: 5.0.5(@types/node@24.13.4)(@vitest/browser-playwright@5.0.5)(@vitest/browser-preview@5.0.5)(@vitest/ui@5.0.5)(@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2))
     optionalDependencies:
       '@vitest/browser-playwright': 5.0.5(@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2))(playwright@1.64.1)(vitest@5.0.5)
-      '@voidzero-dev/vite-plus-darwin-arm64': 1.3.0
-      '@voidzero-dev/vite-plus-darwin-x64': 1.3.0
-      '@voidzero-dev/vite-plus-linux-arm64-gnu': 1.3.0
-      '@voidzero-dev/vite-plus-linux-arm64-musl': 1.3.0
-      '@voidzero-dev/vite-plus-linux-x64-gnu': 1.3.0
-      '@voidzero-dev/vite-plus-linux-x64-musl': 1.3.0
-      '@voidzero-dev/vite-plus-win32-arm64-msvc': 1.3.0
-      '@voidzero-dev/vite-plus-win32-x64-msvc': 1.3.0
-      playwright: 1.64.1
-    transitivePeerDependencies:
-      - '@arethetypeswrong/core'
-      - '@astrojs/compiler-rs'
-      - '@edge-runtime/vm'
-      - '@opentelemetry/api'
-      - '@types/node'
-      - '@typescript/native-preview'
-      - '@vitejs/devtools'
-      - '@vitest/coverage-istanbul'
-      - '@vitest/coverage-v8'
-      - '@vitest/ui'
-      - '@volar/typescript'
-      - '@vue/language-core'
-      - bufferutil
-      - esbuild
-      - happy-dom
-      - jiti
-      - jsdom
-      - less
-      - msw
-      - publint
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - svelte
-      - terser
-      - tsx
-      - typescript
-      - unplugin-unused
-      - unrun
-      - utf-8-validate
-      - vue-tsc
-      - yaml
-
-  vite-plus@1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2):
-    dependencies:
-      '@oxc-project/types': 0.154.0
-      '@oxlint/plugins': 1.88.0
-      '@vitest/browser': 5.0.5(@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2))(vitest@5.0.5)
-      '@vitest/browser-preview': 5.0.5(@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2))(vitest@5.0.5)
-      '@vitest/mocker': 5.0.5(@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2))
-      '@vitest/pretty-format': 5.0.5
-      '@vitest/snapshot': 5.0.5
-      '@vitest/spy': 5.0.5
-      '@vitest/utils': 5.0.5
-      oxfmt: 0.73.0(vite-plus@1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2))
-      oxlint: 1.88.0(oxlint-tsgolint@7.0.2004)(vite-plus@1.3.0(@types/node@24.13.4)(@vitest/ui@5.0.5)(playwright@1.64.1)(typescript@7.0.2))
-      oxlint-tsgolint: 7.0.2004
-      vite: '@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2)'
-      vitest: 5.0.5(@types/node@24.13.4)(@vitest/browser-playwright@5.0.5)(@vitest/browser-preview@5.0.5)(@vitest/ui@5.0.5)(@voidzero-dev/vite-plus-core@1.3.0(@types/node@24.13.4)(typescript@7.0.2))
-    optionalDependencies:
       '@voidzero-dev/vite-plus-darwin-arm64': 1.3.0
       '@voidzero-dev/vite-plus-darwin-x64': 1.3.0
       '@voidzero-dev/vite-plus-linux-arm64-gnu': 1.3.0

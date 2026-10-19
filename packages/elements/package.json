@@ -30,6 +30,7 @@
     "@flat-html/vite": "workspace:*",
     "@types/node": "catalog:",
     "@vitest/browser-playwright": "catalog:",
+    "lightningcss": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
