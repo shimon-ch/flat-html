@@ -4,7 +4,12 @@ export default defineConfig({
   run: {
     cache: true,
   },
-  lint: {},
+  lint: {
+    options: {
+      typeAware: true,
+      typeCheck: true,
+    },
+  },
   fmt: {
     ignorePatterns: ["docs/**", "**/*.md"],
   },

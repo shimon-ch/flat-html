@@ -8,12 +8,7 @@ export default defineConfig({
     },
     exports: true,
   },
-  lint: {
-    options: {
-      typeAware: true,
-      typeCheck: true,
-    },
-  },
+  lint: {},
   fmt: {},
   test: {
     include: ["tests/**/*.test.ts"],
