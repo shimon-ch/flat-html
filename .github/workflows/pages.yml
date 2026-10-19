@@ -34,6 +34,8 @@ jobs:
       - uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: apps/site/lighthouserc.json
+          # 1 回だけだと起動直後の計測が実行機の混み具合を拾って判定がぶれる。3 回測り中央値で判定する（ADR-0021）
+          runs: 3
           uploadArtifacts: true
       - uses: actions/upload-pages-artifact@v5
         with:
