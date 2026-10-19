@@ -43,6 +43,8 @@ jobs:
 
   deploy:
     needs: build
+    # 公開を保留している間は配信しない（ADR-0025）。リポジトリ変数 PAGES_DEPLOY を true にすると再開する
+    if: vars.PAGES_DEPLOY == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
