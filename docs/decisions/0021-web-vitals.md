@@ -29,4 +29,5 @@
 - コンポーネントごとのバイト上限は、元のソースではなく縮小後の量で測る。元のソースを測ると、コメントで説明を書くほど予算が減るため
 - JS は Vite の `minify` で縮小する。CSS は Vite 自身が CSS の縮小に使う lightningcss の `transform`（`minify: true`）で縮小する。Vite の `minify` は CSS には使えない
 - 上限はコンポーネントごとに、そのコンポーネントのテストに置く
+- 測るのはコンポーネント自身の重さで、利用者のビルドが足す分は含めない。CSS は対象ブラウザ（`targets`）を渡さずに縮小する。渡すと lightningcss が古いブラウザ向けの代替変数を足し、color-scheme の CSS は 209 から 311 バイトに増える。これは JS で Vite が足す `modulepreload` の補助コードを数えないのと同じ扱い
 - color-scheme の上限は CSS 512 バイト、JS 1024 バイト
