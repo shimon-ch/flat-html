@@ -1,5 +1,5 @@
 import { parseFragment } from "parse5";
-import { assetKey } from "./assets.ts";
+import { assetKey, resolveAssetUrls } from "./assets.ts";
 import {
   childrenOf,
   getAttr,
@@ -15,12 +15,14 @@ import {
 import { Scope } from "./evaluator.ts";
 import { render } from "./render.ts";
 import { distribute, rootElements } from "./slots.ts";
-import { TemplateError, type TemplateSource } from "./types.ts";
+import { TemplateError, type TemplateSource, type TransformOptions } from "./types.ts";
 
 /** 展開の間だけ生きる文脈。 */
 export interface ExpandContext {
   /** 参照名からテンプレートを探す。同じ名前は 1 回の変換で 1 回だけ解決される */
   resolve(name: string): Promise<TemplateSource | null>;
+  /** テンプレートに書かれた資産の URL を解決する。省略時は書き換えない */
+  resolveAsset: TransformOptions["resolveAsset"];
   /** 走査している入力のファイルパス。エラー表示に使う */
   path: string | undefined;
 }
@@ -67,6 +69,7 @@ async function expandOne(
     throw new TemplateError(`<flat-${name}> のテンプレートが見つからない`, ctx.path, lineOf(el));
   }
   const fragment = parseFragment(template.source, { sourceCodeLocationInfo: true });
+  if (ctx.resolveAsset) await resolveAssetUrls(fragment, template.path, ctx.resolveAsset);
   const args = Object.fromEntries(el.attrs.map((a) => [a.name, a.value]));
   const scope = new Scope(args);
   render(fragment, scope, template.path);

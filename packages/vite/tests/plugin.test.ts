@@ -32,8 +32,14 @@ const pluginContext: MinimalPluginContextWithoutEnvironment = {
 async function fixture(): Promise<string> {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "flat-html-")));
   await mkdir(path.join(root, "site/components/badge"), { recursive: true });
+  await mkdir(path.join(root, "site/components/boxed"), { recursive: true });
   await mkdir(path.join(root, "lib"), { recursive: true });
   await writeFile(path.join(root, "site/components/badge/index.html"), "<span>site</span>");
+  await writeFile(
+    path.join(root, "site/components/boxed/index.html"),
+    '<link rel="stylesheet" href="./index.css"><link rel="stylesheet" href="/site.css"><div>boxed</div>',
+  );
+  await writeFile(path.join(root, "site/components/boxed/index.css"), "div { color: red }");
   await writeFile(path.join(root, "lib/badge.html"), "<span>lib</span>");
   await writeFile(path.join(root, "lib/card.html"), "<article><slot></slot></article>");
   await writeFile(
@@ -78,4 +84,28 @@ test("transformIndexHtml は order: pre で、探索先の順にテンプレー�
   expect(joined).toContain("layout base.html → site/base.html");
   expect(joined).toContain("flat-card → lib/card.html");
   expect(joined).toContain("flat-badge → site/components/badge/index.html");
+});
+
+test("テンプレートの隣にある資産は /@fs/ の URL へ書き換わり、/ で始まる URL は触られない", async () => {
+  const root = await fixture();
+  const plugin = flatHtml({ roots: ["site/components", "lib"] });
+  await resolveConfig(
+    { root, configFile: false, plugins: [plugin], customLogger: createLogger("silent") },
+    "build",
+  );
+
+  const ctx: IndexHtmlTransformContext = {
+    path: "/index.html",
+    filename: path.join(root, "site/index.html"),
+  };
+  const html =
+    "<!doctype html><html><head><title>t</title></head><body><flat-boxed></flat-boxed></body></html>";
+  const result = await hookOf(plugin).handler.call(pluginContext, html, ctx);
+
+  const css = path.join(root, "site/components/boxed/index.css");
+  expect(result).toBe(
+    `<!DOCTYPE html><html><head><title>t</title><link rel="stylesheet" href="/@fs${css}">` +
+      '<link rel="stylesheet" href="/site.css"></head>' +
+      '<body><div data-flat="boxed">boxed</div></body></html>',
+  );
 });

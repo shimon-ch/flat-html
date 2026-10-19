@@ -17,6 +17,7 @@ function createContext(
   const cache = new Map<string, Promise<TemplateSource | null>>();
   return {
     path: options.path,
+    resolveAsset: options.resolveAsset,
     resolve(name) {
       let pending = cache.get(name);
       if (!pending) {
@@ -34,6 +35,7 @@ function createContext(
 /**
  * HTML 文字列の `flat-*` 参照を展開し、資産を `<head>` へ集約して返す。Vite には依存しない。
  * `<html>` を持つ入力はページとして扱い、レイアウトの合流と集約を行う。持たない入力は断片として展開だけ行う。
+ * テンプレートとレイアウトに書かれた資産の URL は `resolveAsset` に委ねる。入力 HTML 自身に書かれた URL は触らない。
  */
 export async function transform(html: string, options: TransformOptions): Promise<TransformResult> {
   const resolved: TransformResult["resolved"] = [];

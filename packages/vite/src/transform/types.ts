@@ -10,6 +10,12 @@ export interface TransformOptions {
   resolve(name: string): Promise<TemplateSource | null>;
   /** `<link rel="layout" href>` の `href` を、参照元ファイル `fromPath` からの相対パスとして解決する。省略時はレイアウトを使えない */
   resolveLayout?(href: string, fromPath?: string): Promise<TemplateSource | null>;
+  /**
+   * テンプレートやレイアウトに書かれた資産の URL を、解決後の URL に直す。
+   * `specifier` は書かれたままの値、`fromPath` はそれが書かれていたファイルのパス。
+   * 触らない場合は null を返す。渡されなければ URL は書き換えられない。
+   */
+  resolveAsset?(specifier: string, fromPath: string): Promise<string | null>;
   /** ページに渡すデータ。ページとレイアウトのテンプレートからだけ見える */
   data?: Record<string, unknown>;
   /** 入力 HTML のファイルパス。エラー表示とレイアウトの相対解決に使う */
