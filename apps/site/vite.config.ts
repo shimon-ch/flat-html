@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { flatHtml } from "@flat-html/vite";
 import { defineConfig } from "vite-plus";
 
-/** GitHub Pages はリポジトリ名の下（`/flat-html/`）に配信される。CI は `GITHUB_PAGES=1` で切り替える */
-const base = process.env.GITHUB_PAGES ? "/flat-html/" : "/";
+/** 配信先のパス。公開用リポジトリ flat-html-site の Pages は `/flat-html-site/` の下に出る（ADR-0026）。CI は `SITE_BASE` で渡す */
+const base = process.env.SITE_BASE ?? "/";
 
 /** `@flat-html/elements` のテンプレート置き場。消費者が npm で使うときと同じ経路（パッケージ名の解決）で求める */
 const elementsRoot = path.join(
@@ -23,7 +23,7 @@ export default defineConfig({
     }),
   ],
   build: {
-    // 配信パスと同じ形で dist に出す（`/` なら dist/、`/flat-html/` なら dist/flat-html/）。
+    // 配信パスと同じ形で dist に出す（`/` なら dist/、`/flat-html-site/` なら dist/flat-html-site/）。
     // Lighthouse CI の静的サーバーが Pages と同じ URL で開けるようにするため
     outDir: path.join("dist", base),
     rollupOptions: {

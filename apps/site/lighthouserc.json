@@ -3,9 +3,9 @@
     "collect": {
       "staticDistDir": "apps/site/dist",
       "url": [
-        "/flat-html/index.html",
-        "/flat-html/pages/css.html",
-        "/flat-html/pages/color-scheme.html"
+        "/flat-html-site/index.html",
+        "/flat-html-site/pages/css.html",
+        "/flat-html-site/pages/color-scheme.html"
       ]
     },
     "assert": {
