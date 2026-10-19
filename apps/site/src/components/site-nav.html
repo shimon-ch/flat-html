@@ -1,0 +1,16 @@
+<nav aria-label="サイト内">
+  <ul>
+    <li>
+      <template if="current == 'home'"
+        ><a href="{{ base }}" aria-current="page">はじめに</a></template
+      >
+      <template if="current != 'home'"><a href="{{ base }}">はじめに</a></template>
+    </li>
+    <li>
+      <template if="current == 'css'"
+        ><a href="{{ base }}pages/css.html" aria-current="page">CSS</a></template
+      >
+      <template if="current != 'css'"><a href="{{ base }}pages/css.html">CSS</a></template>
+    </li>
+  </ul>
+</nav>

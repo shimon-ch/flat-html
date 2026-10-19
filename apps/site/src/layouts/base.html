@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>flat-html</title>
+    <link rel="stylesheet" href="/src/site.css" />
+  </head>
+  <body>
+    <header>
+      <p><a href="{{ base }}">flat-html</a></p>
+      <!-- 現在位置はページが渡す。差し込みがなければ現在位置なしの一覧になる（ADR-0011） -->
+      <slot name="nav"><flat-site-nav base="{{ base }}"></flat-site-nav></slot>
+    </header>
+    <main><slot></slot></main>
+    <footer>
+      <p>
+        <small
+          >flat-html — 素朴な HTML 部品群。
+          <a href="https://github.com/shimon-ch/flat-html">GitHub</a></small
+        >
+      </p>
+    </footer>
+  </body>
+</html>
