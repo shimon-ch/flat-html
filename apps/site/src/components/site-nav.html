@@ -12,5 +12,13 @@
       >
       <template if="current != 'css'"><a href="{{ base }}pages/css.html">CSS</a></template>
     </li>
+    <li>
+      <template if="current == 'color-scheme'"
+        ><a href="{{ base }}pages/color-scheme.html" aria-current="page">color-scheme</a></template
+      >
+      <template if="current != 'color-scheme'"
+        ><a href="{{ base }}pages/color-scheme.html">color-scheme</a></template
+      >
+    </li>
   </ul>
 </nav>

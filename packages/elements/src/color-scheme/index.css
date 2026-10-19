@@ -1,0 +1,16 @@
+/* 層を使うスタイルシートは、すべて冒頭で完全な順序を宣言する（ADR-0024）。宣言は冪等で、
+   どのファイルが先に読み込まれても順序が変わらない。これがないと束ね器の出力順で components が base に負ける。 */
+@layer reset, base, components, site;
+
+/* クラスセレクタ禁止（ADR-0005）。
+   選ばれた値で :root の color-scheme を上書きし、色は tokens.css の light-dark() に追従させる（ADR-0014）。
+   value="system" に規則がないのは、tokens.css の :root { color-scheme: light dark } がそのまま既定になるため。 */
+@layer components {
+  :root:has(input[name="flat-color-scheme"][value="light"]:checked) {
+    color-scheme: light;
+  }
+
+  :root:has(input[name="flat-color-scheme"][value="dark"]:checked) {
+    color-scheme: dark;
+  }
+}
