@@ -1,6 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { transform, type TemplateSource } from "@flat-html/vite";
+import { transform as transformCss } from "lightningcss";
+import { minify } from "vite";
 import type { BrowserCommand } from "vite-plus/test/node";
 
 /**
@@ -28,24 +30,41 @@ const expand: BrowserCommand<[html: string], string> = async (_ctx, html) => {
   return result.html;
 };
 
-/** コンポーネント固有の資産 1 件のファイル名とバイト数。 */
+/** コンポーネント固有の資産 1 件のファイル名と、縮小後のバイト数。 */
 export interface AssetSize {
   file: string;
   bytes: number;
 }
 
-/** 固有資産とみなす拡張子。テンプレート（.html）、仕様（.md）、テスト（.ts）は含めない */
-const ASSET_EXTENSIONS = new Set([".css", ".js"]);
+/** ファイル名とその内容を受け取り、縮小後のバイト数を返す。 */
+type MinifiedBytes = (file: string, content: Buffer) => Promise<number>;
 
-/** `src/<component>/` 直下にある固有の CSS と JS のバイト数を、ファイル名順で返す。 */
+/** JS は Vite の `minify` で縮小する */
+const minifiedJs: MinifiedBytes = async (file, content) => {
+  const result = await minify(file, content.toString("utf8"));
+  return Buffer.byteLength(result.code);
+};
+
+/** CSS は Vite が CSS の縮小に使う lightningcss で縮小する。Vite の `minify` は CSS に空文字列を返すため使えない */
+const minifiedCss: MinifiedBytes = async (file, content) =>
+  transformCss({ filename: file, code: content, minify: true }).code.byteLength;
+
+/** 固有資産とみなす拡張子と、その縮小方法。テンプレート（.html）、仕様（.md）、テスト（.ts）は含めない */
+const MINIFIERS = new Map<string, MinifiedBytes>([
+  [".css", minifiedCss],
+  [".js", minifiedJs],
+]);
+
+/** `src/<component>/` 直下にある固有の CSS と JS の縮小後のバイト数を、ファイル名順で返す。 */
 const assetSizes: BrowserCommand<[component: string], AssetSize[]> = async (_ctx, component) => {
   const dir = path.join(SRC, component);
   const entries = await readdir(dir, { withFileTypes: true });
   const sizes: AssetSize[] = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !ASSET_EXTENSIONS.has(path.extname(entry.name))) continue;
+    const minified = entry.isFile() ? MINIFIERS.get(path.extname(entry.name)) : undefined;
+    if (!minified) continue;
     const content = await readFile(path.join(dir, entry.name));
-    sizes.push({ file: entry.name, bytes: content.byteLength });
+    sizes.push({ file: entry.name, bytes: await minified(entry.name, content) });
   }
   return sizes.sort((a, b) => a.file.localeCompare(b.file));
 };

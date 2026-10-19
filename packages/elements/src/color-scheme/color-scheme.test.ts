@@ -3,9 +3,9 @@ import { userEvent } from "vite-plus/test/browser";
 import { assetBytes, expand, layoutShiftOf, render, squash } from "../../tests/browser.ts";
 import "./index.css";
 
-/** 固有資産のバイト上限（ADR-0021）。実測は index.css 867 / index.js 1487 バイト */
-const CSS_LIMIT = 1024;
-const JS_LIMIT = 2048;
+/** 固有資産の縮小後のバイト上限（ADR-0021）。縮小後の実測は index.css 209 / index.js 374 バイト */
+const CSS_LIMIT = 512;
+const JS_LIMIT = 1024;
 
 /** localStorage の鍵。index.js と同じ値を、テスト側から独立に書いて突き合わせる */
 const KEY = "flat-color-scheme";
