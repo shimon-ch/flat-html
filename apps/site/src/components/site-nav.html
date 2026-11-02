@@ -1,23 +1,18 @@
 <nav aria-label="サイト内">
   <ul>
     <li>
-      <template if="current == 'home'"
-        ><a href="{{ base }}" aria-current="page">はじめに</a></template
-      >
-      <template if="current != 'home'"><a href="{{ base }}">はじめに</a></template>
+      <a href="{{ base }}" aria-current="{{ current == 'home' && 'page' || null }}">はじめに</a>
     </li>
     <li>
-      <template if="current == 'css'"
-        ><a href="{{ base }}pages/css.html" aria-current="page">CSS</a></template
+      <a href="{{ base }}pages/css.html" aria-current="{{ current == 'css' && 'page' || null }}"
+        >CSS</a
       >
-      <template if="current != 'css'"><a href="{{ base }}pages/css.html">CSS</a></template>
     </li>
     <li>
-      <template if="current == 'color-scheme'"
-        ><a href="{{ base }}pages/color-scheme.html" aria-current="page">color-scheme</a></template
-      >
-      <template if="current != 'color-scheme'"
-        ><a href="{{ base }}pages/color-scheme.html">color-scheme</a></template
+      <a
+        href="{{ base }}pages/color-scheme.html"
+        aria-current="{{ current == 'color-scheme' && 'page' || null }}"
+        >color-scheme</a
       >
     </li>
   </ul>

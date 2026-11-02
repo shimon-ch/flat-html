@@ -21,6 +21,8 @@ import { ExpressionSyntaxError, parseExpression } from "./parser.ts";
 import { TemplateError } from "./types.ts";
 
 const INTERPOLATION = /\{\{\s*([\s\S]*?)\s*\}\}/g;
+/** 値の先頭の `{{ }}`。末尾に `$` を付けると `{{ a }}{{ b }}` 全体と一致してしまうため、値全体との一致は長さで確かめる。 */
+const LEADING_INTERPOLATION = /^\{\{\s*([\s\S]*?)\s*\}\}/;
 const EACH = /^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s+of\s+([\s\S]+)$/;
 
 function evalAt(
@@ -58,6 +60,28 @@ function countNewlines(text: string): number {
   return text.split("\n").length - 1;
 }
 
+/** 値全体がちょうど 1 つの `{{ }}` でできていれば、その中の式を返す。前後に空白や他の文字があれば `undefined`。 */
+function soleExpression(value: string): string | undefined {
+  const match = LEADING_INTERPOLATION.exec(value);
+  return match && match[0].length === value.length ? match[1] : undefined;
+}
+
+/**
+ * 属性値の `{{ }}` を評価する。値全体がちょうど 1 つの `{{ }}` で、結果が `null` か `undefined` なら
+ * 属性を取り除くことを `undefined` で示す。それ以外は `interpolate` と同じく文字列にする。
+ */
+function renderAttribute(
+  value: string,
+  scope: Scope,
+  el: Element,
+  path: string | undefined,
+): string | undefined {
+  const source = soleExpression(value);
+  if (source === undefined) return interpolate(value, scope, el, path);
+  const result = evalIn(source, scope, el, path);
+  return result === null || result === undefined ? undefined : stringify(result);
+}
+
 /**
  * `{{ }}` と `<template if/each/html>` を `scope` のもとで評価し、木を書き換える。
  * 属性のない素の `<template>` の中身は不活性のまま触らない。
@@ -77,7 +101,10 @@ function renderElement(el: Element, scope: Scope, path: string | undefined): voi
     renderDirective(el, scope, path);
     return;
   }
-  for (const attr of el.attrs) attr.value = interpolate(attr.value, scope, el, path);
+  el.attrs = el.attrs.flatMap((attr) => {
+    const value = renderAttribute(attr.value, scope, el, path);
+    return value === undefined ? [] : [{ ...attr, value }];
+  });
   if (!isTemplate(el)) render(el, scope, path);
 }
 
