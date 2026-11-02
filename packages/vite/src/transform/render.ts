@@ -12,6 +12,7 @@ import {
   isText,
   lineOf,
   replaceWith,
+  sourcePathOf,
   type ChildNode,
   type Element,
   type Node,
@@ -20,6 +21,7 @@ import {
 } from "./dom.ts";
 import { evaluate, Scope, stringify } from "./evaluator.ts";
 import { ExpressionSyntaxError, parseExpression, pathHeads, type Expr } from "./parser.ts";
+import { unmarkBraces } from "./source.ts";
 import { TemplateError } from "./types.ts";
 
 const INTERPOLATION = /\{\{\s*([\s\S]*?)\s*\}\}/g;
@@ -27,13 +29,21 @@ const INTERPOLATION = /\{\{\s*([\s\S]*?)\s*\}\}/g;
 const LEADING_INTERPOLATION = /^\{\{\s*([\s\S]*?)\s*\}\}/;
 const EACH = /^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s+of\s+([\s\S]+)$/;
 
-/** 式を構文解析する。構文の誤りは `path` と `line` を添えた `TemplateError` にする。 */
-function parseAt(source: string, line: number | undefined, path: string | undefined): Expr {
+/**
+ * `node` に書かれた式 `source` を構文解析する。
+ * 構文の誤りは、`node` を書いたファイル（記録がなければ `path`）と `line` を添えた `TemplateError` にする。
+ */
+function parseAt(
+  source: string,
+  node: Node,
+  line: number | undefined,
+  path: string | undefined,
+): Expr {
   try {
-    return parseExpression(source);
+    return parseExpression(unmarkBraces(source));
   } catch (error) {
     if (error instanceof ExpressionSyntaxError) {
-      throw new TemplateError(error.message, path, line);
+      throw new TemplateError(error.message, sourcePathOf(node, path), line);
     }
     throw error;
   }
@@ -42,14 +52,15 @@ function parseAt(source: string, line: number | undefined, path: string | undefi
 function evalAt(
   source: string,
   scope: Scope,
+  node: Node,
   line: number | undefined,
   path: string | undefined,
 ): unknown {
-  return evaluate(parseAt(source, line, path), scope);
+  return evaluate(parseAt(source, node, line, path), scope);
 }
 
 function evalIn(source: string, scope: Scope, node: Node, path: string | undefined): unknown {
-  return evalAt(source, scope, lineOf(node), path);
+  return evalAt(source, scope, node, lineOf(node), path);
 }
 
 /** `node` に書かれた `text` の `offset` 文字目の行番号。`node` の開始行に、そこまでの改行数を足す。 */
@@ -62,7 +73,7 @@ function lineAt(text: string, offset: number, node: Node): number | undefined {
 function interpolate(text: string, scope: Scope, node: Node, path: string | undefined): string {
   if (!text.includes("{{")) return text;
   return text.replace(INTERPOLATION, (_, source: string, offset: number) =>
-    stringify(evalAt(source, scope, lineAt(text, offset, node), path)),
+    stringify(evalAt(source, scope, node, lineAt(text, offset, node), path)),
   );
 }
 
@@ -96,6 +107,7 @@ function renderAttribute(
  * `{{ }}` と `<template if/each/html>` を `scope` のもとで評価し、木を書き換える。
  * 属性のない素の `<template>` の中身は不活性のまま触らない。
  * 生テキスト要素（`hasRawText`）の中身は直列化でエスケープされないので展開しない。その要素自身の属性は展開する（ADR-0033）。
+ * エラーは、ノードを書いたファイル（記録がなければ `path`）と行で報告する（ADR-0035）。
  */
 export function render(root: ParentNode, scope: Scope, path: string | undefined): void {
   for (const child of childrenOf(root)) {
@@ -160,7 +172,11 @@ function splitEach(
 ): { name: string; listSource: string } {
   const match = EACH.exec(source);
   if (!match) {
-    throw new TemplateError(`each は「item of items」の形で書く: ${source}`, path, lineOf(el));
+    throw new TemplateError(
+      `each は「item of items」の形で書く: ${source}`,
+      sourcePathOf(el, path),
+      lineOf(el),
+    );
   }
   const [, name, listSource] = match;
   return { name: name!, listSource: listSource! };
@@ -176,7 +192,11 @@ function renderEach(
   const list = evalIn(listSource, scope, el, path);
   if (list === null || list === undefined) return [];
   if (!Array.isArray(list)) {
-    throw new TemplateError(`each の対象が配列でない: ${listSource}`, path, lineOf(el));
+    throw new TemplateError(
+      `each の対象が配列でない: ${listSource}`,
+      sourcePathOf(el, path),
+      lineOf(el),
+    );
   }
   const out: ChildNode[] = [];
   for (const item of list) {
@@ -198,12 +218,12 @@ function renderEach(
  */
 export function referencedNames(root: ParentNode, path: string | undefined): Set<string> {
   const names = new Set<string>();
-  const add = (source: string, line: number | undefined): void => {
-    for (const name of pathHeads(parseAt(source, line, path))) names.add(name);
+  const add = (source: string, node: Node, line: number | undefined): void => {
+    for (const name of pathHeads(parseAt(source, node, line, path))) names.add(name);
   };
   const addInterpolations = (text: string, node: Node): void => {
     for (const match of text.matchAll(INTERPOLATION)) {
-      add(match[1]!, lineAt(text, match.index, node));
+      add(match[1]!, node, lineAt(text, match.index, node));
     }
   };
   const visit = (parent: ParentNode): void => {
@@ -212,11 +232,11 @@ export function referencedNames(root: ParentNode, path: string | undefined): Set
         addInterpolations(child.value, child);
       } else if (isTemplate(child) && !isInertTemplate(child)) {
         const condition = getAttr(child, "if");
-        if (condition !== undefined) add(condition, lineOf(child));
+        if (condition !== undefined) add(condition, child, lineOf(child));
         const each = getAttr(child, "each");
-        if (each !== undefined) add(splitEach(child, each, path).listSource, lineOf(child));
+        if (each !== undefined) add(splitEach(child, each, path).listSource, child, lineOf(child));
         const html = getAttr(child, "html");
-        if (html !== undefined) add(html, lineOf(child));
+        if (html !== undefined) add(html, child, lineOf(child));
         visit(child.content);
       } else if (isElement(child)) {
         for (const attr of child.attrs) addInterpolations(attr.value, child);

@@ -1,4 +1,3 @@
-import { parseFragment } from "parse5";
 import { assetKey, resolveAssetUrls } from "./assets.ts";
 import {
   childrenOf,
@@ -8,6 +7,7 @@ import {
   lineOf,
   replaceWith,
   setAttr,
+  sourcePathOf,
   type ChildNode,
   type Element,
   type ParentNode,
@@ -15,6 +15,7 @@ import {
 import { Scope } from "./evaluator.ts";
 import { referencedNames, render } from "./render.ts";
 import { distribute, rootElements } from "./slots.ts";
+import { parseFragmentSource, unmarkBraces } from "./source.ts";
 import { TemplateError, type TemplateSource, type TransformOptions } from "./types.ts";
 
 /** 展開の間だけ生きる文脈。 */
@@ -23,7 +24,7 @@ export interface ExpandContext {
   resolve(name: string): Promise<TemplateSource | null>;
   /** テンプレートに書かれた資産の URL を解決する。省略時は書き換えない */
   resolveAsset: TransformOptions["resolveAsset"];
-  /** 走査している入力のファイルパス。エラー表示に使う */
+  /** 走査している入力のファイルパス。書いたファイルの記録がないノードのエラー表示に使う */
   path: string | undefined;
 }
 
@@ -71,11 +72,15 @@ async function expandOne(
 ): Promise<ChildNode[]> {
   const template = await ctx.resolve(name);
   if (!template) {
-    throw new TemplateError(`<flat-${name}> のテンプレートが見つからない`, ctx.path, lineOf(el));
+    throw new TemplateError(
+      `<flat-${name}> のテンプレートが見つからない`,
+      sourcePathOf(el, ctx.path),
+      lineOf(el),
+    );
   }
-  const fragment = parseFragment(template.source, { sourceCodeLocationInfo: true });
+  const fragment = parseFragmentSource(template.source, template.path);
   if (ctx.resolveAsset) await resolveAssetUrls(fragment, template.path, ctx.resolveAsset);
-  const args = Object.fromEntries(el.attrs.map((a) => [a.name, a.value]));
+  const args = Object.fromEntries(el.attrs.map((a) => [a.name, unmarkBraces(a.value)]));
   const used = referencedNames(fragment, template.path);
   render(fragment, new Scope(args), template.path);
   await expandReferences(fragment, { ...ctx, path: template.path }, [...stack, name]);

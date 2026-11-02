@@ -80,8 +80,33 @@ function createTemplate(namespaceURI: Element["namespaceURI"], attrs: Element["a
   };
 }
 
-/** 部分木を深く複製する。位置情報も写す。`<template>` は中身も複製する。 */
+/** ノードを書いたファイルのパス。解析した直後に `registerSource` で記録する。 */
+const sourcePaths = new WeakMap<Node, string>();
+
+/**
+ * `root` とその子孫のすべてのノードを、ファイル `path` に書かれたものとして記録する。`<template>` の中身にも入る。
+ * ソースを解析した直後に呼ぶ。エラーはこの記録のパスで報告する（ADR-0035）。
+ */
+export function registerSource(root: Node, path: string): void {
+  sourcePaths.set(root, path);
+  if (isTemplate(root)) registerSource(root.content, path);
+  if ("childNodes" in root) for (const child of root.childNodes) registerSource(child, path);
+}
+
+/** `node` を書いたファイルのパス。記録がなければ `fallback`。 */
+export function sourcePathOf(node: Node, fallback: string | undefined): string | undefined {
+  return sourcePaths.get(node) ?? fallback;
+}
+
+/** 部分木を深く複製する。位置情報と、ノードを書いたファイルのパスも写す。`<template>` は中身も複製する。 */
 export function cloneNode(node: ChildNode): ChildNode {
+  const clone = copyNode(node);
+  const path = sourcePaths.get(node);
+  if (path !== undefined) sourcePaths.set(clone, path);
+  return clone;
+}
+
+function copyNode(node: ChildNode): ChildNode {
   if (isElement(node)) {
     const attrs = node.attrs.map((a) => ({ ...a }));
     const el = isTemplate(node)

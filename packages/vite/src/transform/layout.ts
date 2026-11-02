@@ -1,4 +1,3 @@
-import { parse } from "parse5";
 import { resolveAssetUrls } from "./assets.ts";
 import {
   appendToHead,
@@ -16,6 +15,7 @@ import {
   type Element,
 } from "./dom.ts";
 import { distribute } from "./slots.ts";
+import { parseDocumentSource, unmarkBraces } from "./source.ts";
 import { TemplateError, type TransformOptions, type TransformResult } from "./types.ts";
 
 interface DocumentParts {
@@ -115,10 +115,10 @@ export async function applyLayouts(
     const head = findFirst(current, "head");
     const link = head && findAllOutsideInertTemplates(head, isLayoutLink)[0];
     if (!link) return current;
-    const href = getAttr(link, "href");
+    const href = unmarkBraces(getAttr(link, "href") ?? "");
     const line = lineOf(link);
     detachWithIndent(link);
-    if (href === undefined || href === "") {
+    if (href === "") {
       throw new TemplateError('<link rel="layout"> に href がない', currentPath, line);
     }
     if (!options.resolveLayout) {
@@ -135,7 +135,7 @@ export async function applyLayouts(
     }
     visited.add(source.path);
     layouts.push({ href, path: source.path });
-    const layout = parse(source.source, { sourceCodeLocationInfo: true });
+    const layout = parseDocumentSource(source.source, source.path);
     if (options.resolveAsset) await resolveAssetUrls(layout, source.path, options.resolveAsset);
     current = merge(current, currentPath, layout, source.path);
     currentPath = source.path;

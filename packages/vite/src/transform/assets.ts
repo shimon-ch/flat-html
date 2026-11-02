@@ -12,6 +12,7 @@ import {
   type Element,
   type ParentNode,
 } from "./dom.ts";
+import { unmarkBraces } from "./source.ts";
 import { TemplateError, type TransformOptions } from "./types.ts";
 
 const LINK_RELS = ["stylesheet", "modulepreload", "preload"];
@@ -74,9 +75,10 @@ export async function resolveAssetUrls(
   for (const el of findAllOutsideInertTemplates(root, (e) => assetRef(e) !== undefined)) {
     const ref = assetRef(el)!;
     if (!isFileSpecifier(ref.url)) continue;
-    const resolved = await resolveAsset(ref.url, fromPath);
+    const specifier = unmarkBraces(ref.url);
+    const resolved = await resolveAsset(specifier, fromPath);
     if (resolved === null) {
-      throw new TemplateError(`資産 ${ref.url} が見つからない`, fromPath, lineOf(el));
+      throw new TemplateError(`資産 ${specifier} が見つからない`, fromPath, lineOf(el));
     }
     setAttr(el, ref.attr, resolved);
   }

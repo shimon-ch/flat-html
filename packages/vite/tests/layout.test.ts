@@ -412,3 +412,148 @@ test("レイアウトの <template if> の中の <slot> には差し込む。素
     );
   }
 });
+
+/** `<body>` が `<p>c</p>` だけで、`base.html` をレイアウトにするページ。 */
+const plainPage =
+  '<!doctype html><html><head><link rel="layout" href="base.html"></head><body><p>c</p></body></html>';
+
+test("レイアウトに書いた式のエラーは、レイアウトのパスと行で報告する", async () => {
+  const cases: Array<[string, string]> = [
+    ["<p>{{ a + b }}</p>", "許可しない記号「+」"],
+    ['<p title="{{ a + b }}"></p>', "許可しない記号「+」"],
+    ['<template if="a + b"></template>', "許可しない記号「+」"],
+    ['<template each="i of a + b"></template>', "許可しない記号「+」"],
+    ['<template html="a + b"></template>', "許可しない記号「+」"],
+    ['<template each="i of items"><p>{{ i + 1 }}</p></template>', "許可しない記号「+」"],
+    ['<template each="items"></template>', "each は「item of items」の形で書く"],
+    ['<template each="i of title"></template>', "each の対象が配列でない"],
+  ];
+  for (const [body, message] of cases) {
+    const base = lines(
+      "<!doctype html>",
+      "<html>",
+      "<head></head>",
+      "<body>",
+      body,
+      "<slot></slot>",
+      "</body>",
+      "</html>",
+    );
+    const result = page(plainPage, {
+      data: { items: [1], title: "t" },
+      resolveLayout: layouts({ "base.html": base }),
+    });
+    await expect(result).rejects.toBeInstanceOf(TemplateError);
+    await expect(result).rejects.toThrow(`layouts/base.html:5: ${message}`);
+  }
+});
+
+test("レイアウトに書いた解決できない参照は、レイアウトのパスと行で報告する", async () => {
+  const base = lines(
+    "<!doctype html>",
+    "<html>",
+    "<head></head>",
+    "<body>",
+    "<main>",
+    "<slot></slot>",
+    "<flat-nope></flat-nope>",
+    "</main>",
+    "</body>",
+    "</html>",
+  );
+  const result = page(plainPage, { resolveLayout: layouts({ "base.html": base }) });
+  await expect(result).rejects.toBeInstanceOf(TemplateError);
+  await expect(result).rejects.toThrow(
+    "layouts/base.html:7: <flat-nope> のテンプレートが見つからない",
+  );
+});
+
+test("多段のレイアウトの中間のレイアウトに書いたエラーは、そのレイアウトのパスと行で報告する", async () => {
+  const outer = lines(
+    "<!doctype html>",
+    "<html>",
+    "<head></head>",
+    "<body><slot></slot></body>",
+    "</html>",
+  );
+  const inner = lines(
+    "<!doctype html>",
+    "<html>",
+    '<head><link rel="layout" href="outer.html"></head>',
+    "<body>",
+    "<slot></slot>",
+    "<p>{{ a + b }}</p>",
+    "</body>",
+    "</html>",
+  );
+  const result = page(
+    '<!doctype html><html><head><link rel="layout" href="inner.html"></head><body><p>c</p></body></html>',
+    { resolveLayout: layouts({ "inner.html": inner, "outer.html": outer }) },
+  );
+  await expect(result).rejects.toBeInstanceOf(TemplateError);
+  await expect(result).rejects.toThrow("layouts/inner.html:6: 許可しない記号「+」");
+});
+
+test("レイアウトへ合流したページの式と参照のエラーは、ページのパスと行で報告する", async () => {
+  const base = lines(
+    "<!doctype html>",
+    "<html>",
+    "<head></head>",
+    "<body>",
+    "<main>",
+    "<slot></slot>",
+    "</main>",
+    "</body>",
+    "</html>",
+  );
+  for (const [body, message] of [
+    ["<p>{{ a + b }}</p>", "許可しない記号「+」"],
+    ["<flat-nope></flat-nope>", "<flat-nope> のテンプレートが見つからない"],
+  ]) {
+    const result = page(
+      lines(
+        "<!doctype html>",
+        "<html>",
+        '<head><link rel="layout" href="base.html"></head>',
+        "<body>",
+        body,
+        "</body>",
+        "</html>",
+      ),
+      { resolveLayout: layouts({ "base.html": base }) },
+    );
+    await expect(result).rejects.toBeInstanceOf(TemplateError);
+    await expect(result).rejects.toThrow(`page.html:5: ${message}`);
+  }
+});
+
+test("レイアウトから参照したテンプレートに書いたエラーは、テンプレートのパスと行で報告する", async () => {
+  const base =
+    "<!doctype html><html><head></head><body><flat-x></flat-x><slot></slot></body></html>";
+  for (const [template, expected] of [
+    ["<p>\n{{ a + b }}</p>", "templates/x.html:2: 許可しない記号「+」"],
+    [
+      "<p>\n\n<flat-nope></flat-nope></p>",
+      "templates/x.html:3: <flat-nope> のテンプレートが見つからない",
+    ],
+  ]) {
+    const result = page(plainPage, {
+      resolveLayout: layouts({ "base.html": base }),
+      resolve: templates({ x: template }),
+    });
+    await expect(result).rejects.toBeInstanceOf(TemplateError);
+    await expect(result).rejects.toThrow(expected);
+  }
+});
+
+test('<link rel="layout"> の href に文字参照で書いた波括弧は、{ と } として解決に渡る', async () => {
+  const result = await page(
+    '<!doctype html><html><head><link rel="layout" href="&#123;base&#125;.html"></head><body></body></html>',
+    {
+      resolveLayout: layouts({
+        "{base}.html": "<!doctype html><html><head></head><body><slot></slot></body></html>",
+      }),
+    },
+  );
+  expect(result.layouts).toEqual([{ href: "{base}.html", path: "layouts/{base}.html" }]);
+});

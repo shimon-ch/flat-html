@@ -375,3 +375,13 @@ test("/ で始まる URL とスキーム付きの URL は解決を問わない�
     ),
   );
 });
+
+test("資産の指定子に文字参照で書いた波括弧は、{ と } として解決に渡る", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const result = await page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({ a: '<link rel="stylesheet" href="./&#123;a&#125;.css"><div>a</div>' }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([{ specifier: "./{a}.css", fromPath: "templates/a.html" }]);
+  expect(result.html).toContain('<link rel="stylesheet" href="/fs/templates/{a}.css">');
+});

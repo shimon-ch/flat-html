@@ -1,10 +1,10 @@
-import { parse, parseFragment, serialize } from "parse5";
 import { aggregate } from "./assets.ts";
 import { findFirst } from "./dom.ts";
 import { Scope } from "./evaluator.ts";
 import { expandReferences, type ExpandContext } from "./expand.ts";
 import { applyLayouts } from "./layout.ts";
 import { render } from "./render.ts";
+import { parseDocumentSource, parseFragmentSource, serializeOutput } from "./source.ts";
 import type { TemplateSource, TransformOptions, TransformResult } from "./types.ts";
 
 export { TemplateError } from "./types.ts";
@@ -43,18 +43,18 @@ export async function transform(html: string, options: TransformOptions): Promis
   const ctx = createContext(options, resolved);
   const scope = new Scope(options.data ?? {});
 
-  const parsed = parse(html, { sourceCodeLocationInfo: true });
+  const parsed = parseDocumentSource(html, options.path);
   const isPage = findFirst(parsed, "html")?.sourceCodeLocation != null;
   if (!isPage) {
-    const fragment = parseFragment(html, { sourceCodeLocationInfo: true });
+    const fragment = parseFragmentSource(html, options.path);
     render(fragment, scope, options.path);
     await expandReferences(fragment, ctx, []);
-    return { html: serialize(fragment), resolved, layouts };
+    return { html: serializeOutput(fragment), resolved, layouts };
   }
 
   const document = await applyLayouts(parsed, options, layouts);
   render(document, scope, options.path);
   await expandReferences(document, ctx, []);
   aggregate(document);
-  return { html: serialize(document), resolved, layouts };
+  return { html: serializeOutput(document), resolved, layouts };
 }
