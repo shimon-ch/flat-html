@@ -114,3 +114,53 @@ export function lineOf(node: Node): number | undefined {
 }
 
 export const isBlankText = (node: ChildNode): boolean => isText(node) && node.value.trim() === "";
+
+const isHead = (node: ParentNode | null): boolean =>
+  node !== null && isElement(node) && node.tagName === "head";
+
+/** 直前の兄弟ノード。なければ `undefined`。 */
+function previousSibling(node: ChildNode): ChildNode | undefined {
+  const siblings = node.parentNode?.childNodes ?? [];
+  const index = siblings.indexOf(node);
+  return index > 0 ? siblings[index - 1] : undefined;
+}
+
+/**
+ * `<head>` の字下げ。最初の子要素の直前にある空白だけのテキストの、最後の改行より後ろを返す。
+ * そのテキストがなければ（詰めて書かれた `<head>` など）`undefined`。
+ */
+export function headIndent(head: Element): string | undefined {
+  const first = head.childNodes.find(isElement);
+  const before = first && previousSibling(first);
+  if (before === undefined || !isText(before) || !isBlankText(before)) return undefined;
+  return before.value.slice(before.value.lastIndexOf("\n") + 1);
+}
+
+/**
+ * ノードを親から外す。親が `<head>` なら、直前にある空白だけのテキストノードも一緒に外す（ADR-0030）。
+ * 親が `<head>` でなければ空白に触らない。`<body>` の空白は描画に影響しうるため。
+ */
+export function detachWithIndent(node: ChildNode): void {
+  if (isHead(node.parentNode)) {
+    const before = previousSibling(node);
+    if (before !== undefined && isBlankText(before)) detach(before);
+  }
+  detach(node);
+}
+
+/**
+ * `node` を `<head>` の末尾へ移す（ADR-0030）。元の位置からは `detachWithIndent` で外す。
+ * `<head>` の最後の子が空白だけのテキスト（`</head>` の前の改行と字下げ）なら、その前へ入れる。
+ * `indent` が文字列なら、`node` の直前に `"\n" + indent` の空白テキストを置く。`undefined` なら空白を足さない。
+ */
+export function appendToHead(head: Element, node: ChildNode, indent: string | undefined): void {
+  detachWithIndent(node);
+  const last = head.childNodes.at(-1);
+  const end = last !== undefined && isBlankText(last) ? last : undefined;
+  const insert = (child: ChildNode): void => {
+    if (end === undefined) defaultTreeAdapter.appendChild(head, child);
+    else defaultTreeAdapter.insertBefore(head, child, end);
+  };
+  if (indent !== undefined) insert(defaultTreeAdapter.createTextNode(`\n${indent}`));
+  insert(node);
+}

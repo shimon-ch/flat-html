@@ -1,12 +1,14 @@
 import { parse } from "parse5";
 import { resolveAssetUrls } from "./assets.ts";
 import {
-  append,
+  appendToHead,
   childrenOf,
-  detach,
+  detachWithIndent,
   findAll,
   findFirst,
   getAttr,
+  headIndent,
+  isBlankText,
   lineOf,
   setAttr,
   type Document,
@@ -43,7 +45,7 @@ function mergeAttrs(target: Element, source: Element): void {
 /** ページとレイアウトの `<head>` にまたがって、条件に合う要素を 1 つだけ残す。ページ側が優先。 */
 function keepOne(pageHead: Element, layoutHead: Element, match: (el: Element) => boolean): void {
   const candidates = [...findAll(pageHead, match), ...findAll(layoutHead, match)];
-  for (const el of candidates.slice(1)) detach(el);
+  for (const el of candidates.slice(1)) detachWithIndent(el);
 }
 
 const isMetaCharset = (el: Element): boolean =>
@@ -54,7 +56,8 @@ const isTitle = (el: Element): boolean => el.tagName === "title";
 
 /**
  * ページをレイアウトへ合流させ、合流後の文書（レイアウト側の木）を返す（ADR-0019）。
- * ページの `<head>` の子はレイアウトの `<head>` の末尾へ、`<body>` の子はレイアウトの `<slot>` へ移す。
+ * ページの `<head>` の子は空白だけのテキストを除いてレイアウトの `<head>` の末尾へ、
+ * `<body>` の子はレイアウトの `<slot>` へ移す。
  */
 function merge(
   page: Document,
@@ -64,12 +67,16 @@ function merge(
 ): Document {
   const p = partsOf(page, pagePath);
   const l = partsOf(layout, layoutPath);
+  // 字下げは、重複除去でレイアウト側の要素が消える前に求める
+  const indent = headIndent(l.head);
   mergeAttrs(l.html, p.html);
   mergeAttrs(l.body, p.body);
   keepOne(p.head, l.head, isTitle);
   keepOne(p.head, l.head, isMetaCharset);
   keepOne(p.head, l.head, isMetaViewport);
-  for (const child of childrenOf(p.head)) append(l.head, child);
+  for (const child of childrenOf(p.head)) {
+    if (!isBlankText(child)) appendToHead(l.head, child, indent);
+  }
   distribute(l.body, childrenOf(p.body));
   return layout;
 }
@@ -92,7 +99,7 @@ export async function applyLayouts(
     if (!link) return current;
     const href = getAttr(link, "href");
     const line = lineOf(link);
-    detach(link);
+    detachWithIndent(link);
     if (href === undefined || href === "") {
       throw new TemplateError('<link rel="layout"> に href がない', currentPath, line);
     }

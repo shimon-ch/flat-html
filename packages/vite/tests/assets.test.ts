@@ -1,5 +1,14 @@
 import { expect, test } from "vite-plus/test";
-import { assetResolver, expand, layouts, page, squash, templates } from "./helpers.ts";
+import {
+  assetResolver,
+  expand,
+  headOf,
+  layouts,
+  lines,
+  page,
+  squash,
+  templates,
+} from "./helpers.ts";
 
 const doc = (head: string, body: string): string =>
   `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
@@ -124,4 +133,72 @@ test("resolveAsset を渡さなければ資産の URL は書き換わらない",
     a: '<link rel="stylesheet" href="./index.css"><div>a</div>',
   });
   expect(html).toBe('<link rel="stylesheet" href="./index.css"><div data-flat="a">a</div>');
+});
+
+test("<body> から集約する資産は <head> の字下げで入り、<body> 側の空白は残る", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      "    <title>t</title>",
+      "  </head>",
+      "  <body>",
+      "    <p>x</p>",
+      '    <script type="module" src="/page.js"></script>',
+      "    <flat-a></flat-a>",
+      "  </body>",
+      "</html>",
+    ),
+    { resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }) },
+  );
+  expect(result.html).toBe(
+    lines(
+      "<!DOCTYPE html><html><head>",
+      "    <title>t</title>",
+      '    <script type="module" src="/page.js"></script>',
+      '    <link rel="stylesheet" href="/a.css">',
+      "  </head>",
+      "  <body>",
+      "    <p>x</p>",
+      "    ",
+      '    <div data-flat="a">a</div>',
+      "  ",
+      "</body></html>",
+    ),
+  );
+});
+
+test("<head> の中の重複を除くとき、空行を残さない", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      '    <link rel="stylesheet" href="/a.css">',
+      "    <title>t</title>",
+      '    <link rel="stylesheet" href="/a.css">',
+      "  </head>",
+      "  <body></body>",
+      "</html>",
+    ),
+  );
+  expect(headOf(result.html)).toBe(
+    lines(
+      "<head>",
+      "    <title>t</title>",
+      '    <link rel="stylesheet" href="/a.css">',
+      "  </head>",
+    ),
+  );
+});
+
+test("詰めて書かれた <head> への集約では空白を足さない", async () => {
+  const result = await page(doc("<title>t</title>", "<p>x</p><flat-a></flat-a>"), {
+    resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }),
+  });
+  expect(result.html).toBe(
+    '<!DOCTYPE html><html><head><title>t</title><link rel="stylesheet" href="/a.css"></head>' +
+      '<body><p>x</p><div data-flat="a">a</div></body></html>',
+  );
 });
