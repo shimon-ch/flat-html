@@ -195,13 +195,24 @@ export function findAllOutsideInertTemplates(
 /**
  * 条件に合う要素を文書順に集める。中身が捨てられる `<template>`（`discardsContent`）の中身には入らず、
  * それ以外の `<template>`（素の `<template>` と `<template if/each>`）の中身には入る。
+ * 素の `<template>`（`isInertTemplate`）の中では描画が行われず、`<template html>` の中身も出力に残るので、
+ * 素の `<template>` の中身ではすべての `<template>` の中身に入る（`findAll`）。
  * 描画の前の木で、出力に残りうる要素をすべて探すときに使う。
  */
 export function findAllOutsideDiscardedContent(
   root: ParentNode,
   match: (el: Element) => boolean,
 ): Element[] {
-  return collect(root, match, discardsContent);
+  const found: Element[] = [];
+  walk(root, (el) => {
+    if (match(el)) found.push(el);
+    if (isTemplate(el) && isInertTemplate(el)) {
+      found.push(...findAll(el, match), ...findAll(el.content, match));
+      return false;
+    }
+    return discardsContent(el) ? false : undefined;
+  });
+  return found;
 }
 
 /**

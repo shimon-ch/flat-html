@@ -36,8 +36,7 @@ function isInside(dir: string, file: string): boolean {
  * root の外にあれば、ビルド（`config.command` が `"build"`）では `page` のディレクトリからの、`./` か `../` で始まる相対パスを返す。
  * 開発サーバーで root の外にあるときと、ドライブが違って相対パスにできないときは `/@fs/<絶対パス>` を返す。
  * 区切りはどれも `/` で、`base` は付けない（ADR-0034）。
- * `page` は開発サーバーでは実在するファイルとは限らない（`server.transformIndexHtml('/', html)` では root のディレクトリになる）ので、
- * 開発サーバーの URL は `page` に頼らない。
+ * `page` は開発サーバーでは実在するファイルとは限らない（`pageFileOf`）ので、開発サーバーの URL は `page` に頼らない。
  */
 function assetUrl(file: string, page: string, config: ResolvedConfig): string {
   if (isInside(config.root, file)) {
@@ -49,6 +48,16 @@ function assetUrl(file: string, page: string, config: ResolvedConfig): string {
     return url.startsWith("../") ? url : `./${url}`;
   }
   return `/@fs/${file.replaceAll(path.sep, "/").replace(/^\//, "")}`;
+}
+
+/**
+ * `transformIndexHtml` の `ctx.filename` から、ページのファイルのパスを求める（ADR-0034）。
+ * `.html` で終わればそのまま返す。終わらなければディレクトリとみなし、その中の `index.html` を返す。
+ * 開発サーバーの Vite は `ctx.filename` を要求の URL のパスを root に繋いで作るので、
+ * `server.transformIndexHtml('/', html)` では root のディレクトリ、末尾が `/` の URL ではそのディレクトリになる。
+ */
+function pageFileOf(filename: string): string {
+  return filename.endsWith(".html") ? filename : path.join(filename, "index.html");
 }
 
 /** 解決一覧を 1 行ずつの文字列にする。パスは Vite の root からの相対で出す。 */
@@ -89,15 +98,15 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
       order: "pre",
       async handler(html, ctx) {
         const roots = options.roots.map((r) => path.resolve(config.root, r));
+        const page = pageFileOf(ctx.filename);
         const result = await transform(html, {
-          path: ctx.filename,
+          path: page,
           data: options.data,
           resolve: (name) => resolveTemplate(roots, name),
-          resolveLayout: (href, fromPath) =>
-            resolveLayoutFile(config.root, fromPath ?? ctx.filename, href),
+          resolveLayout: (href, fromPath) => resolveLayoutFile(config.root, fromPath ?? page, href),
           resolveAsset: async (specifier, fromPath) => {
             const file = await resolveAssetFile(fromPath, specifier, resolvePackage);
-            return file === null ? null : assetUrl(file, ctx.filename, config);
+            return file === null ? null : assetUrl(file, page, config);
           },
         });
 

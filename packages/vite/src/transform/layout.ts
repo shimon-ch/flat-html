@@ -3,7 +3,6 @@ import {
   appendToHead,
   childrenOf,
   detachWithIndent,
-  findAllInDocumentTree,
   findAllOutsideInertTemplates,
   findFirst,
   getAttr,
@@ -12,7 +11,6 @@ import {
   lineOf,
   replaceWith,
   setAttr,
-  sourcePathOf,
   type Document,
   type Element,
 } from "./dom.ts";
@@ -45,6 +43,37 @@ function mergeAttrs(target: Element, source: Element): void {
   }
 }
 
+/**
+ * ページとレイアウトの `<head>` にまたがって、条件に合う要素を 1 つだけ残す（ADR-0023 / ADR-0032）。
+ * 候補は式の評価より前に探すので、素の `<template>` の中は数えず、`<template if/each/html>` の中は数える。
+ * 残す要素は、ページの `<head>` の直下にある最初の候補、ページ側の最初の候補、レイアウトの `<head>` の直下にある最初の候補、
+ * レイアウト側の最初の候補の順に、最初に見つかったもの。`<template if/each/html>` の中の候補は式の評価で消えうるため、直下の候補を先に選ぶ。
+ * 残すページ側の要素が `<head>` の直下にあり、レイアウトの `<head>` の直下にも同じ種類の要素があれば、
+ * ページ側の要素をその最初の要素の位置へ移す（ADR-0032）。その位置の直前の空白はそのまま使う。
+ * `<template if/each/html>` の中の要素は位置の基準にしない。
+ */
+function keepOne(pageHead: Element, layoutHead: Element, match: (el: Element) => boolean): void {
+  const fromPage = findAllOutsideInertTemplates(pageHead, match);
+  const fromLayout = findAllOutsideInertTemplates(layoutHead, match);
+  const kept =
+    fromPage.find((el) => el.parentNode === pageHead) ??
+    fromPage[0] ??
+    fromLayout.find((el) => el.parentNode === layoutHead) ??
+    fromLayout[0];
+  if (kept === undefined) return;
+  const position =
+    kept.parentNode === pageHead
+      ? fromLayout.find((el) => el.parentNode === layoutHead)
+      : undefined;
+  if (position !== undefined) {
+    detachWithIndent(kept);
+    replaceWith(position, [kept]);
+  }
+  for (const el of [...fromPage, ...fromLayout]) {
+    if (el !== kept && el !== position) detachWithIndent(el);
+  }
+}
+
 const isMetaCharset = (el: Element): boolean =>
   el.tagName === "meta" && getAttr(el, "charset") !== undefined;
 const isMetaViewport = (el: Element): boolean =>
@@ -52,35 +81,9 @@ const isMetaViewport = (el: Element): boolean =>
 const isTitle = (el: Element): boolean => el.tagName === "title";
 
 /**
- * 描画の後の文書の `<head>` で、`<title>`、`<meta charset>`、`<meta name="viewport">` をそれぞれ 1 つに揃える（ADR-0023 / ADR-0032）。
- * 式の評価の後、参照の展開の前に呼ぶ。候補は `<head>` の中の、どの `<template>` の中身にもない要素（`findAllInDocumentTree`）。
- * 残すのは、その要素を書いたファイル（`sourcePathOf`）が `files` の前にある要素で、同じファイルの中では文書順で先の要素。
- * `files` はページ、内側のレイアウト、外側のレイアウトの順に並べる。書いたファイルの記録がない要素は、`files` の先頭（ページ）が書いたものとみなす。
- * 残す要素は、候補のうち文書順で最初の要素の位置に置く。他の候補は直前の空白ごと消す（ADR-0030）。
- */
-export function keepOneInHead(document: Document, files: ReadonlyArray<string | undefined>): void {
-  const head = findFirst(document, "head");
-  if (!head) return;
-  const rank = (el: Element): number => {
-    const index = files.indexOf(sourcePathOf(el, files[0]));
-    return index === -1 ? files.length : index;
-  };
-  for (const match of [isTitle, isMetaCharset, isMetaViewport]) {
-    const [first, ...rest] = findAllInDocumentTree(head, match);
-    if (first === undefined) continue;
-    const kept = rest.reduce((best, el) => (rank(el) < rank(best) ? el : best), first);
-    if (kept !== first) {
-      detachWithIndent(kept);
-      replaceWith(first, [kept]);
-    }
-    for (const el of rest) if (el !== kept) detachWithIndent(el);
-  }
-}
-
-/**
  * ページをレイアウトへ合流させ、合流後の文書（レイアウト側の木）を返す（ADR-0019）。
  * ページの `<head>` の子は空白だけのテキストを除いてレイアウトの `<head>` の末尾へ、
- * `<body>` の子はレイアウトの `<slot>` へ移す。`<title>` などの重複は、ここでは除かない（`keepOneInHead`）。
+ * `<body>` の子はレイアウトの `<slot>` へ移す。ただし `keepOne` がレイアウト側の位置へ移した要素は末尾へ動かさない。
  */
 function merge(
   page: Document,
@@ -90,9 +93,13 @@ function merge(
 ): Document {
   const p = partsOf(page, pagePath);
   const l = partsOf(layout, layoutPath);
+  // 字下げは、重複除去でレイアウト側の要素が消える前に求める
   const indent = headIndent(l.head);
   mergeAttrs(l.html, p.html);
   mergeAttrs(l.body, p.body);
+  keepOne(p.head, l.head, isTitle);
+  keepOne(p.head, l.head, isMetaCharset);
+  keepOne(p.head, l.head, isMetaViewport);
   for (const child of childrenOf(p.head)) {
     if (!isBlankText(child)) appendToHead(l.head, child, indent);
   }

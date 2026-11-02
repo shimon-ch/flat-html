@@ -358,11 +358,8 @@ test("レイアウトの <template if> の中の <title> も重複除去の候�
   }
 });
 
-test("ページの <title> が複数残れば文書順で先のものを残す。偽の <template if> の中の <title> は候補にならない", async () => {
-  for (const [x, kept] of [
-    [true, "A"],
-    [false, "B"],
-  ] as const) {
+test("ページの <template if> の中の <title> より、ページの <head> の直下の <title> を残す", async () => {
+  for (const x of [true, false]) {
     const result = await page(
       '<!doctype html><html><head><link rel="layout" href="base.html">' +
         '<template if="x"><title>A</title></template><title>B</title></head><body></body></html>',
@@ -374,19 +371,45 @@ test("ページの <title> が複数残れば文書順で先のものを残す�
         }),
       },
     );
-    expect(headOf(result.html)).toBe(`<head><title>${kept}</title></head>`);
+    expect(headOf(result.html)).toBe("<head><title>B</title></head>");
   }
 });
 
-test("レイアウトの <template if> の中の <title> は、評価の後に残ったときだけ位置の基準になる", async () => {
+test("レイアウトの <head> の直下に同じ種類がなければ、ページの要素は <template if> の中へ入れず末尾へ入れる", async () => {
+  for (const x of [true, false]) {
+    expect(
+      await mergeTitleInto(`<template if="x"><title>A</title></template>${colorScheme}`, { x }),
+    ).toBe(`<head>${colorScheme}<title>P</title></head>`);
+  }
+});
+
+test("レイアウトの <template if> の中の参照に差し込む <title> は、ページに <title> があれば消え、ページの <title> が残る", async () => {
+  const result = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"><title>Page</title></head><body></body></html>',
+    {
+      resolveLayout: layouts({
+        "base.html":
+          '<!doctype html><html><head><template if="true"><flat-seo><title>Layout</title></flat-seo></template>' +
+          "</head><body><slot></slot></body></html>",
+      }),
+      resolve: templates({ seo: '<meta name="description" content="d">' }),
+    },
+  );
+  expect(headOf(result.html)).toBe(
+    '<head><meta name="description" content="d" data-flat="seo"><title>Page</title></head>',
+  );
+});
+
+test("レイアウトが <template html> の値で出した <title> は、合流の時点でまだないので重複除去の候補にならず、ページの <title> と両方が出る", async () => {
   expect(
-    await mergeTitleInto(`<template if="x"><title>A</title></template>${colorScheme}`, { x: true }),
-  ).toBe(`<head><title>P</title>${colorScheme}</head>`);
-  expect(
-    await mergeTitleInto(`<template if="x"><title>A</title></template>${colorScheme}`, {
-      x: false,
-    }),
-  ).toBe(`<head>${colorScheme}<title>P</title></head>`);
+    await mergeTitleInto(`<template html="'<title>FromLayoutHtml</title>'"></template>`, {}),
+  ).toBe("<head><title>FromLayoutHtml</title><title>P</title></head>");
+});
+
+test("ページの <title> で消えるレイアウトの <title> は描画しないので、その中の式の誤りで失敗しない", async () => {
+  expect(await mergeTitleInto("<title>{{ site.name( }}</title>", {})).toBe(
+    "<head><title>P</title></head>",
+  );
 });
 
 /** `<head>` の中身が `pageHead` のページを、`<head>` の中身が `layoutHead` のレイアウトへ合流させ、出力の `<head>` を返す。 */
@@ -407,30 +430,43 @@ async function mergeHeads(
   return headOf(result.html);
 }
 
-test("ページの <template if> の中にしか <title> がなく、条件が偽なら、レイアウトの <title> が残る", async () => {
+test("既知の制約: ページの <title> が <template if> の中にしかなく、条件が偽なら、レイアウトの <title> も消えて <title> が残らない", async () => {
   expect(
     await mergeHeads(
       '<template if="t"><title>{{ t }}</title></template>',
       `<title>Default</title>${colorScheme}`,
       { t: "" },
     ),
-  ).toBe(`<head><title>Default</title>${colorScheme}</head>`);
+  ).toBe(`<head>${colorScheme}</head>`);
 });
 
-test("ページの <template if> の中の <title> は、条件が真なら、レイアウトの <title> の位置に入る", async () => {
+test("ページの <title> の値を中の式で切り替えれば、条件によらず <title> が残り、レイアウトの <title> の位置に入る", async () => {
+  for (const [t, kept] of [
+    ["", "Default"],
+    ["T", "T"],
+  ]) {
+    expect(
+      await mergeHeads("<title>{{ t || 'Default' }}</title>", `<title>Base</title>${colorScheme}`, {
+        t,
+      }),
+    ).toBe(`<head><title>${kept}</title>${colorScheme}</head>`);
+  }
+});
+
+test("ページの <template if> の中の <title> は、条件が真なら残るが、レイアウトの <title> の位置は引き継がない", async () => {
   expect(
     await mergeHeads(
       '<template if="t"><title>{{ t }}</title></template>',
       `<title>Default</title>${colorScheme}`,
       { t: "T" },
     ),
-  ).toBe(`<head><title>T</title>${colorScheme}</head>`);
+  ).toBe(`<head>${colorScheme}<title>T</title></head>`);
 });
 
-test("レイアウトが <template if> の真と偽に分けて書いた <title> は、条件の真偽どちらでも 1 つだけ残る", async () => {
-  for (const [x, kept] of [
-    [true, "X"],
-    [false, "NotX"],
+test("既知の制約: レイアウトが <template if> の真と偽に分けて書いた <title> は、前の方だけが残る", async () => {
+  for (const [x, head] of [
+    [true, `<head><title>X</title>${colorScheme}</head>`],
+    [false, `<head>${colorScheme}</head>`],
   ] as const) {
     expect(
       await mergeHeads(
@@ -439,7 +475,7 @@ test("レイアウトが <template if> の真と偽に分けて書いた <title>
           colorScheme,
         { x },
       ),
-    ).toBe(`<head><title>${kept}</title>${colorScheme}</head>`);
+    ).toBe(head);
   }
 });
 
@@ -449,14 +485,14 @@ test("多段のレイアウトでは、ページ、内側のレイアウト、�
     `${colorScheme}</head><body><slot></slot></body></html>`;
   const inner =
     '<!doctype html><html><head><link rel="layout" href="outer.html">' +
-    '<template if="x"><title>Inner</title></template></head><body><slot></slot></body></html>';
-  for (const [x, kept] of [
-    [true, "Inner"],
-    [false, "Outer"],
-  ] as const) {
+    "<title>Inner</title></head><body><slot></slot></body></html>";
+  for (const [pageHead, kept] of [
+    ["", "Inner"],
+    ["<title>P</title>", "P"],
+  ]) {
     const result = await page(
-      '<!doctype html><html><head><link rel="layout" href="inner.html"></head><body></body></html>',
-      { data: { x }, resolveLayout: layouts({ "inner.html": inner, "outer.html": outer }) },
+      `<!doctype html><html><head><link rel="layout" href="inner.html">${pageHead}</head><body></body></html>`,
+      { resolveLayout: layouts({ "inner.html": inner, "outer.html": outer }) },
     );
     expect(headOf(result.html)).toBe(
       `<head><meta charset="utf-8"><title>${kept}</title>${colorScheme}</head>`,

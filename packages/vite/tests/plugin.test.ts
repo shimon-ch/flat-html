@@ -180,6 +180,25 @@ test("開発サーバーで ctx.filename が root のディレクトリでも（
   expect(await transformBoxed("serve", "<title>t</title>", "")).toBe(boxedOutput);
 });
 
+test("ctx.filename がディレクトリなら、ページをその中の index.html とみなし、ページからの相対パスのレイアウトを解決する", async () => {
+  const root = await fixture();
+  await mkdir(path.join(root, "layouts"), { recursive: true });
+  await writeFile(
+    path.join(root, "layouts/base.html"),
+    "<!doctype html><html><head><title>Base</title></head><body><main><slot></slot></main></body></html>",
+  );
+  const result = await transformPage({
+    root,
+    page: root,
+    roots: ["site/components"],
+    command: "serve",
+    html: '<!doctype html><html><head><link rel="layout" href="./layouts/base.html"></head><body><p>x</p></body></html>',
+  });
+  expect(result).toBe(
+    "<!DOCTYPE html><html><head><title>Base</title></head><body><main><p>x</p></main></body></html>",
+  );
+});
+
 test("テンプレートの資産の指定子が解決できなければ、テンプレートのパスと行を添えて TemplateError になる", async () => {
   const root = await fixture();
   const typo = path.join(root, "site/components/typo/index.html");

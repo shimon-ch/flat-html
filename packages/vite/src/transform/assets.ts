@@ -74,37 +74,115 @@ function isFileSpecifier(path: string): boolean {
 }
 
 /**
+ * `splitSpecifier` の `suffix`（空文字か、`?` か `#` で始まる文字列）を、`?` から `#` の前までと、`#` から後ろに分ける。
+ * どちらも区切りの文字を含み、なければ空文字。先頭の `#` も区切りとみなす。
+ */
+function splitSuffix(suffix: string): { query: string; hash: string } {
+  const hashAt = suffix.indexOf("#");
+  return hashAt === -1
+    ? { query: suffix, hash: "" }
+    : { query: suffix.slice(0, hashAt), hash: suffix.slice(hashAt) };
+}
+
+/**
+ * 解決した URL `resolved` に、書かれた指定子から外した `?` か `#` から後ろ `suffix` を付け直す（ADR-0034）。
+ * `resolved` も `splitSpecifier` で分けるので、`#` で始まる `resolved` の先頭の `#` は区切りとみなさない。
+ * 両方に `?` から後ろがあれば、`resolved` のものの後ろに `&` でつなぐ。
+ * `suffix` に `#` から後ろがあれば、`resolved` の `#` から後ろをそれで置き換える。なければ `resolved` のものを残す。
+ */
+function attachSuffix(resolved: string, suffix: string): string {
+  if (suffix === "") return resolved;
+  const { path, suffix: resolvedSuffix } = splitSpecifier(resolved);
+  const target = splitSuffix(resolvedSuffix);
+  const written = splitSuffix(suffix);
+  const query =
+    written.query === ""
+      ? target.query
+      : target.query === ""
+        ? written.query
+        : `${target.query}&${written.query.slice(1)}`;
+  return path + query + (written.hash === "" ? target.hash : written.hash);
+}
+
+/** `JSON.stringify` で表せれば、その文字列。表せなければ（`undefined`、関数、循環する値など）`undefined`。 */
+function toJson(value: unknown): string | undefined {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `resolveAsset` が投げた値 `error` を、資産を書いたファイル `fromPath` と要素 `el` の行の `TemplateError` にする。
+ * `error` が `TemplateError` なら、パスと行を重ねないよう、そのまま返す。
+ * それ以外は理由を添える。`Error` なら `message`、それ以外は JSON で表せれば JSON、表せなければ `String` の結果を理由にする。
+ */
+function resolutionError(
+  error: unknown,
+  specifier: string,
+  fromPath: string,
+  el: Element,
+): TemplateError {
+  if (error instanceof TemplateError) return error;
+  const reason = error instanceof Error ? error.message : (toJson(error) ?? String(error));
+  return new TemplateError(`資産 ${specifier} を解決できない: ${reason}`, fromPath, lineOf(el));
+}
+
+/** `resolveAsset` の結果。拒否されたときは投げた値を `error` に持つ。 */
+type Resolution = { ok: true; url: string | null } | { ok: false; error: unknown };
+
+/**
+ * `resolve` を呼び、その結果を拒否されない `Resolution` の Promise にする。`Promise.all` が最初の拒否で止まらないようにする。
+ * `resolve` が同期的に投げた値も `error` に入れる。
+ */
+async function settle(resolve: () => Promise<string | null>): Promise<Resolution> {
+  try {
+    return { ok: true, url: await resolve() };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+/**
  * `root` の中の資産要素の URL を、`fromPath` の位置を基準に解決した URL へ書き換える。
  * 集約より前に呼ぶ。重複除去の鍵が解決後の URL になり、別々のテンプレートが同じ資産を指しても 1 つにまとまる。
  * 解決は式の評価より前に行う。パスの部分に `{{` を含む URL は解決しない（`isFileSpecifier`）。
  * `resolveAsset` にはパスの部分だけを、文字参照で書いた波括弧を `{` と `}` に戻して渡す（`unmarkBraces`）。
- * 返った URL の波括弧は区切りとみなさない文字にし（`markValueBraces`。ADR-0035）、`?` か `#` から後ろを書かれたまま付け直す。
+ * 返った URL は、`{{` か `}}` を含めば波括弧を区切りとみなさない文字にし（`markValueBraces`。ADR-0035）、`?` か `#` から後ろを付け直す（`attachSuffix`）。
  * 素の `<template>`（`<template shadowrootmode>` を含む）の中身も、`<template if/each>` の中身も解決する（ADR-0024）。
- * `html` を持ち `each` を持たない `<template>` の中身は、描画で捨てられるので解決しない（`findAllOutsideDiscardedContent`）。
- * `resolveAsset` が null を返したら、`fromPath` とその要素の行を添えて `TemplateError` を投げる（ADR-0034）。
- * `resolveAsset` が例外を投げたら、その文言を理由として添えた `TemplateError` を投げる。
+ * `html` を持ち `each` を持たない `<template>` の中身は、描画で捨てられるので解決しない。
+ * ただし素の `<template>` の中の `<template html>` は描画されず中身が残るので、その中身は解決する（`findAllOutsideDiscardedContent`）。
+ * すべての指定子の解決を並べて待ち、その後で文書順に書き換える。同じ指定子の解決を 1 回にまとめるのは `resolveAsset` の控えに任せる。
+ * 文書順で最初に解決できなかった要素について、`resolveAsset` が null を返したら、`fromPath` とその要素の行を添えて `TemplateError` を投げる（ADR-0034）。
+ * `resolveAsset` が例外を投げたら、`resolutionError` の `TemplateError` を投げる。
  */
 export async function resolveAssetUrls(
   root: ParentNode,
   fromPath: string,
   resolveAsset: NonNullable<TransformOptions["resolveAsset"]>,
 ): Promise<void> {
-  for (const el of findAllOutsideDiscardedContent(root, (e) => assetRef(e) !== undefined)) {
-    const ref = assetRef(el)!;
-    const { path, suffix } = splitSpecifier(ref.url);
-    if (!isFileSpecifier(path)) continue;
-    const specifier = unmarkBraces(path);
-    let resolved: string | null;
-    try {
-      resolved = await resolveAsset(specifier, fromPath);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      throw new TemplateError(`資産 ${specifier} を解決できない: ${reason}`, fromPath, lineOf(el));
-    }
-    if (resolved === null) {
+  const targets = findAllOutsideDiscardedContent(root, (e) => assetRef(e) !== undefined).flatMap(
+    (el) => {
+      const ref = assetRef(el);
+      if (ref === undefined) return [];
+      const { path, suffix } = splitSpecifier(ref.url);
+      if (!isFileSpecifier(path)) return [];
+      return [{ el, attr: ref.attr, specifier: unmarkBraces(path), suffix }];
+    },
+  );
+  const resolved = await Promise.all(
+    targets.map(async (target) => ({
+      ...target,
+      resolution: await settle(() => resolveAsset(target.specifier, fromPath)),
+    })),
+  );
+  for (const { el, attr, specifier, suffix, resolution } of resolved) {
+    if (!resolution.ok) throw resolutionError(resolution.error, specifier, fromPath, el);
+    if (resolution.url === null) {
       throw new TemplateError(`資産 ${specifier} が見つからない`, fromPath, lineOf(el));
     }
-    setAttr(el, ref.attr, markValueBraces(resolved) + suffix);
+    setAttr(el, attr, attachSuffix(markValueBraces(resolution.url), suffix));
   }
 }
 
