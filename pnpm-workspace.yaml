@@ -5,7 +5,7 @@ packages:
 catalogMode: prefer
 
 catalog:
-  "@types/node": ^24
+  "@types/node": ^26
   "@vitest/browser-playwright": 5.0.5
   lightningcss: ^1.33.0
   parse5: ^8.0.1
