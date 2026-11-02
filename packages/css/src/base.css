@@ -290,6 +290,16 @@ dialog,
     display 0.2s allow-discrete;
 }
 
+dialog > :first-child,
+[popover] > :first-child {
+  margin-block-start: 0;
+}
+
+dialog > :last-child,
+[popover] > :last-child {
+  margin-block-end: 0;
+}
+
 dialog[open],
 [popover]:popover-open {
   opacity: 1;
@@ -304,8 +314,15 @@ dialog[open],
   }
 }
 
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+/* overscroll-behavior はスクロールコンテナにしか効かない。overflow: hidden は ::backdrop をスクロールコンテナにするためにあり、外さない。 */
 dialog::backdrop {
   background: light-dark(rgb(0 0 0 / 0.4), rgb(0 0 0 / 0.6));
+  overflow: hidden;
+  overscroll-behavior: contain;
   transition:
     background 0.2s ease,
     overlay 0.2s allow-discrete,

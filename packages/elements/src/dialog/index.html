@@ -1,0 +1,7 @@
+<dialog id="{{ id }}" aria-labelledby="{{ id }}-title">
+  <h2 id="{{ id }}-title"><slot name="title"></slot></h2>
+  <slot></slot>
+  <button type="button" commandfor="{{ id }}" command="close">
+    <slot name="close">閉じる</slot>
+  </button>
+</dialog>
