@@ -1,4 +1,4 @@
-import { defaultTreeAdapter, type DefaultTreeAdapterTypes as T } from "parse5";
+import { defaultTreeAdapter, html, type DefaultTreeAdapterTypes as T } from "parse5";
 
 export type Node = T.Node;
 export type ChildNode = T.ChildNode;
@@ -12,6 +12,27 @@ export const isElement = (node: Node): node is Element => defaultTreeAdapter.isE
 export const isText = (node: Node): node is T.TextNode => defaultTreeAdapter.isTextNode(node);
 export const isTemplate = (node: Node): node is T.Template =>
   isElement(node) && node.tagName === "template" && "content" in node;
+
+/**
+ * if / each / html のいずれも持たない素の `<template>`。中身は不活性として扱う（ADR-0023）。
+ * 型の絞り込みはしない。偽のときに `<template>` でないとは言えないため。
+ */
+export const isInertTemplate = (node: Node): boolean =>
+  isTemplate(node) && !["if", "each", "html"].some((name) => getAttr(node, name) !== undefined);
+
+/**
+ * `html` を持ち `each` を持たない `<template>`。描画で `html` の値に置き換わり、中身は捨てられる（ADR-0033）。
+ * 型の絞り込みはしない。偽のときに `<template>` でないとは言えないため。
+ */
+export const discardsContent = (node: Node): boolean =>
+  isTemplate(node) && getAttr(node, "html") !== undefined && getAttr(node, "each") === undefined;
+
+/**
+ * 直列化で中身のテキストがエスケープされない要素（`<script>`、`<style>` など）。
+ * 判定は parse5 の serialize と同じものを使う。`parse` と `serialize` の既定に合わせ、スクリプトは有効とみなす。
+ */
+export const hasRawText = (el: Element): boolean =>
+  el.namespaceURI === html.NS.HTML && html.hasUnescapedText(el.tagName, true);
 
 /** 要素から属性値を取る。なければ `undefined`。 */
 export function getAttr(el: Element, name: string): string | undefined {
@@ -34,8 +55,18 @@ export function detach(node: ChildNode): void {
   defaultTreeAdapter.detachNode(node);
 }
 
-/** `target` の直前に `nodes` を移し、`target` を取り除く。`nodes` は元の親から外される。 */
+/**
+ * `target` の直前に `nodes` を移し、`target` を取り除く。`nodes` は元の親から外される。
+ * `nodes` が空なら、`target` を `detachWithIndent` で外す。
+ * `target` の親が `<head>` で、`nodes` が空白だけのテキストばかりなら、`nodes` を入れずに `target` を `detachWithIndent` で外す。
+ * どちらも `<head>` に空行を残さないため（ADR-0030）。`<head>` の外では、空白だけのテキストもそのまま入れる。
+ */
 export function replaceWith(target: ChildNode, nodes: readonly ChildNode[]): void {
+  if (nodes.length === 0 || (isHead(target.parentNode) && nodes.every(isBlankText))) {
+    for (const node of nodes) detach(node);
+    detachWithIndent(target);
+    return;
+  }
   const parent = target.parentNode;
   if (!parent) return;
   for (const node of nodes) {
@@ -56,14 +87,48 @@ export function childrenOf(parent: ParentNode): ChildNode[] {
   return [...parent.childNodes];
 }
 
-/** 部分木を深く複製する。位置情報も写す。 */
+/** 空の中身（DocumentFragment）を持つ `<template>` 要素を作る。 */
+function createTemplate(namespaceURI: Element["namespaceURI"], attrs: Element["attrs"]): Template {
+  return {
+    ...defaultTreeAdapter.createElement("template", namespaceURI, attrs),
+    nodeName: "template",
+    tagName: "template",
+    content: defaultTreeAdapter.createDocumentFragment(),
+  };
+}
+
+/** ノードを書いたファイルのパス。解析した直後に `registerSource` で記録する。 */
+const sourcePaths = new WeakMap<Node, string>();
+
+/**
+ * `root` とその子孫のすべてのノードを、ファイル `path` に書かれたものとして記録する。`<template>` の中身にも入る。
+ * ソースを解析した直後に呼ぶ。エラーはこの記録のパスで報告する（ADR-0035）。
+ */
+export function registerSource(root: Node, path: string): void {
+  sourcePaths.set(root, path);
+  if (isTemplate(root)) registerSource(root.content, path);
+  if ("childNodes" in root) for (const child of root.childNodes) registerSource(child, path);
+}
+
+/** `node` を書いたファイルのパス。記録がなければ `fallback`。 */
+export function sourcePathOf(node: Node, fallback: string | undefined): string | undefined {
+  return sourcePaths.get(node) ?? fallback;
+}
+
+/** 部分木を深く複製する。位置情報と、ノードを書いたファイルのパスも写す。`<template>` は中身も複製する。 */
 export function cloneNode(node: ChildNode): ChildNode {
+  const clone = copyNode(node);
+  const path = sourcePaths.get(node);
+  if (path !== undefined) sourcePaths.set(clone, path);
+  return clone;
+}
+
+function copyNode(node: ChildNode): ChildNode {
   if (isElement(node)) {
-    const el = defaultTreeAdapter.createElement(
-      node.tagName,
-      node.namespaceURI,
-      node.attrs.map((a) => ({ ...a })),
-    );
+    const attrs = node.attrs.map((a) => ({ ...a }));
+    const el = isTemplate(node)
+      ? createTemplate(node.namespaceURI, attrs)
+      : defaultTreeAdapter.createElement(node.tagName, node.namespaceURI, attrs);
     el.sourceCodeLocation = node.sourceCodeLocation;
     for (const child of node.childNodes) append(el, cloneNode(child));
     if (isTemplate(node) && isTemplate(el)) {
@@ -94,14 +159,72 @@ export function walk(root: ParentNode, visit: (el: Element) => boolean | undefin
   }
 }
 
-/** 条件に合う要素を文書順に集める。 */
-export function findAll(root: ParentNode, match: (el: Element) => boolean): Element[] {
+/**
+ * 条件に合う要素を文書順に集める。`skip` が真を返す要素は、それ自体は `match` で判定するが、
+ * 子孫と（`<template>` なら）中身には入らない。
+ */
+function collect(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+  skip: (el: Element) => boolean,
+): Element[] {
   const found: Element[] = [];
   walk(root, (el) => {
     if (match(el)) found.push(el);
-    return undefined;
+    return skip(el) ? false : undefined;
   });
   return found;
+}
+
+/** 条件に合う要素を文書順に集める。`<template>` の中身にも入る。 */
+export function findAll(root: ParentNode, match: (el: Element) => boolean): Element[] {
+  return collect(root, match, () => false);
+}
+
+/**
+ * 条件に合う要素を文書順に集める。素の `<template>`（`isInertTemplate`）の中身には入らず、
+ * `<template if/each/html>` の中身には入る。
+ */
+export function findAllOutsideInertTemplates(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+): Element[] {
+  return collect(root, match, isInertTemplate);
+}
+
+/**
+ * 条件に合う要素を文書順に集める。中身が捨てられる `<template>`（`discardsContent`）の中身には入らず、
+ * それ以外の `<template>`（素の `<template>` と `<template if/each>`）の中身には入る。
+ * 素の `<template>`（`isInertTemplate`）の中では描画が行われず、`<template html>` の中身も出力に残るので、
+ * 素の `<template>` の中身ではすべての `<template>` の中身に入る（`findAll`）。
+ * 描画の前の木で、出力に残りうる要素をすべて探すときに使う。
+ */
+export function findAllOutsideDiscardedContent(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+): Element[] {
+  const found: Element[] = [];
+  walk(root, (el) => {
+    if (match(el)) found.push(el);
+    if (isTemplate(el) && isInertTemplate(el)) {
+      found.push(...findAll(el, match), ...findAll(el.content, match));
+      return false;
+    }
+    return discardsContent(el) ? false : undefined;
+  });
+  return found;
+}
+
+/**
+ * 条件に合う要素のうち、文書木に入るものを文書順に集める。どの `<template>` の中身にも入らない。
+ * 描画の後の文書に使う。描画の後に残る `<template>` は、素の `<template>`（`<template shadowrootmode>` を含む）と、
+ * `<template html>` の値から生まれたものだけである。どちらも描画を通らず、中身は不活性な中身か影の木になる。
+ */
+export function findAllInDocumentTree(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+): Element[] {
+  return collect(root, match, isTemplate);
 }
 
 export function findFirst(root: ParentNode, tagName: string): Element | undefined {
@@ -126,14 +249,14 @@ function previousSibling(node: ChildNode): ChildNode | undefined {
 }
 
 /**
- * `<head>` の字下げ。最初の子要素の直前にある空白だけのテキストの、最後の改行より後ろを返す。
- * そのテキストがなければ（詰めて書かれた `<head>` など）`undefined`。
+ * `<head>` の字下げ（ADR-0030）。`<head>` の最初の子ノードが空白だけのテキストで改行を含むなら、
+ * 最後の改行より後ろを返す。それ以外（詰めて書かれた `<head>`、1 行で書かれた `<head>` など）は `undefined`。
  */
 export function headIndent(head: Element): string | undefined {
-  const first = head.childNodes.find(isElement);
-  const before = first && previousSibling(first);
-  if (before === undefined || !isText(before) || !isBlankText(before)) return undefined;
-  return before.value.slice(before.value.lastIndexOf("\n") + 1);
+  const first = head.childNodes[0];
+  if (first === undefined || !isText(first) || !isBlankText(first)) return undefined;
+  const newline = first.value.lastIndexOf("\n");
+  return newline === -1 ? undefined : first.value.slice(newline + 1);
 }
 
 /**

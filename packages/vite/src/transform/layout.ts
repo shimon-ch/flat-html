@@ -1,20 +1,21 @@
-import { parse } from "parse5";
 import { resolveAssetUrls } from "./assets.ts";
 import {
   appendToHead,
   childrenOf,
   detachWithIndent,
-  findAll,
+  findAllOutsideInertTemplates,
   findFirst,
   getAttr,
   headIndent,
   isBlankText,
   lineOf,
+  replaceWith,
   setAttr,
   type Document,
   type Element,
 } from "./dom.ts";
 import { distribute } from "./slots.ts";
+import { parseDocumentSource, unmarkBraces } from "./source.ts";
 import { TemplateError, type TransformOptions, type TransformResult } from "./types.ts";
 
 interface DocumentParts {
@@ -42,10 +43,35 @@ function mergeAttrs(target: Element, source: Element): void {
   }
 }
 
-/** ページとレイアウトの `<head>` にまたがって、条件に合う要素を 1 つだけ残す。ページ側が優先。 */
+/**
+ * ページとレイアウトの `<head>` にまたがって、条件に合う要素を 1 つだけ残す（ADR-0023 / ADR-0032）。
+ * 候補は式の評価より前に探すので、素の `<template>` の中は数えず、`<template if/each/html>` の中は数える。
+ * 残す要素は、ページの `<head>` の直下にある最初の候補、ページ側の最初の候補、レイアウトの `<head>` の直下にある最初の候補、
+ * レイアウト側の最初の候補の順に、最初に見つかったもの。`<template if/each/html>` の中の候補は式の評価で消えうるため、直下の候補を先に選ぶ。
+ * 残すページ側の要素が `<head>` の直下にあり、レイアウトの `<head>` の直下にも同じ種類の要素があれば、
+ * ページ側の要素をその最初の要素の位置へ移す（ADR-0032）。その位置の直前の空白はそのまま使う。
+ * `<template if/each/html>` の中の要素は位置の基準にしない。
+ */
 function keepOne(pageHead: Element, layoutHead: Element, match: (el: Element) => boolean): void {
-  const candidates = [...findAll(pageHead, match), ...findAll(layoutHead, match)];
-  for (const el of candidates.slice(1)) detachWithIndent(el);
+  const fromPage = findAllOutsideInertTemplates(pageHead, match);
+  const fromLayout = findAllOutsideInertTemplates(layoutHead, match);
+  const kept =
+    fromPage.find((el) => el.parentNode === pageHead) ??
+    fromPage[0] ??
+    fromLayout.find((el) => el.parentNode === layoutHead) ??
+    fromLayout[0];
+  if (kept === undefined) return;
+  const position =
+    kept.parentNode === pageHead
+      ? fromLayout.find((el) => el.parentNode === layoutHead)
+      : undefined;
+  if (position !== undefined) {
+    detachWithIndent(kept);
+    replaceWith(position, [kept]);
+  }
+  for (const el of [...fromPage, ...fromLayout]) {
+    if (el !== kept && el !== position) detachWithIndent(el);
+  }
 }
 
 const isMetaCharset = (el: Element): boolean =>
@@ -57,7 +83,7 @@ const isTitle = (el: Element): boolean => el.tagName === "title";
 /**
  * ページをレイアウトへ合流させ、合流後の文書（レイアウト側の木）を返す（ADR-0019）。
  * ページの `<head>` の子は空白だけのテキストを除いてレイアウトの `<head>` の末尾へ、
- * `<body>` の子はレイアウトの `<slot>` へ移す。
+ * `<body>` の子はレイアウトの `<slot>` へ移す。ただし `keepOne` がレイアウト側の位置へ移した要素は末尾へ動かさない。
  */
 function merge(
   page: Document,
@@ -84,6 +110,7 @@ function merge(
 /**
  * `<link rel="layout">` をたどってページをレイアウトへ合流させる。多段のレイアウトは順に適用する。
  * 解決したレイアウトは `layouts` に記録する。
+ * `<link rel="layout">` は素の `<template>` の中からは探さず（ADR-0023）、`<template if/each/html>` の中からは探す。
  */
 export async function applyLayouts(
   document: Document,
@@ -95,12 +122,12 @@ export async function applyLayouts(
   const visited = new Set<string>();
   for (;;) {
     const head = findFirst(current, "head");
-    const link = head && findAll(head, isLayoutLink)[0];
+    const link = head && findAllOutsideInertTemplates(head, isLayoutLink)[0];
     if (!link) return current;
-    const href = getAttr(link, "href");
+    const href = unmarkBraces(getAttr(link, "href") ?? "");
     const line = lineOf(link);
     detachWithIndent(link);
-    if (href === undefined || href === "") {
+    if (href === "") {
       throw new TemplateError('<link rel="layout"> に href がない', currentPath, line);
     }
     if (!options.resolveLayout) {
@@ -117,7 +144,7 @@ export async function applyLayouts(
     }
     visited.add(source.path);
     layouts.push({ href, path: source.path });
-    const layout = parse(source.source, { sourceCodeLocationInfo: true });
+    const layout = parseDocumentSource(source.source, source.path);
     if (options.resolveAsset) await resolveAssetUrls(layout, source.path, options.resolveAsset);
     current = merge(current, currentPath, layout, source.path);
     currentPath = source.path;

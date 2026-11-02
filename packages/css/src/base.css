@@ -227,7 +227,7 @@ details {
 }
 
 details[name] + details[name] {
-  margin-block-start: calc(var(--flat-space) * -2 + 1px);
+  margin-block-start: calc(var(--flat-space) * -2 - 1px);
   border-start-start-radius: 0;
   border-start-end-radius: 0;
 }

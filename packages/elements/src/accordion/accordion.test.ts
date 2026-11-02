@@ -100,6 +100,16 @@ describe("APG（Disclosure / Accordion のキーボード操作）", () => {
   });
 });
 
+describe("連結の見た目（base.css）", () => {
+  test("同じ name の項目は枠線を 1px 重ね、境界が 1 本の線になる", async () => {
+    render(await expand(faq));
+    const [first, second] = items();
+    if (!first || !second) throw new Error("details が 2 つない");
+    const gap = second.getBoundingClientRect().top - first.getBoundingClientRect().bottom;
+    expect(gap).toBeCloseTo(-1, 1);
+  });
+});
+
 describe("Web Vitals（ADR-0021）", () => {
   test("展開結果の描画で累積レイアウトシフトが 0", async () => {
     const html = await expand(faq);

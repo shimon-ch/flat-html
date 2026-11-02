@@ -51,7 +51,7 @@ Invoker Commands に対応していないブラウザ（Chrome 134 以前、Fire
 ```
 
 - `id` は必須の引数。テンプレートは `{{ id }}` を `<dialog>` の `id`、題の `<h2>` の `id`（`{{ id }}-title`）、`aria-labelledby`、閉じるボタンの `commandfor` に使う。式で使った引数は透過しない（ADR-0010）ので、`<dialog>` の `id` はテンプレート自身が書いている
-- `id` を書き忘れても展開は失敗しない。値のない `{{ }}` は空文字になるので、`id=""`、`aria-labelledby="-title"`、`commandfor=""` が出力され、開くボタンからも閉じるボタンからも `<dialog>` を指せなくなる
+- `id` を書き忘れても展開は失敗しない。値が `{{ id }}` だけの属性は、`id` がないと属性ごと出力されない（ADR-0029）。そのため `<dialog>` の `id` と閉じるボタンの `commandfor` が付かず、値に他の文字が混ざる `aria-labelledby` と題の `id` は `-title` になる。開くボタンからも閉じるボタンからも `<dialog>` を指せず、`id` のない dialog が 2 つあると `-title` が重複する
 - `slot="title"` の要素が `<h2>` の中へ移る。`<h2>` の `id` と `<dialog>` の `aria-labelledby` が結び付き、題がダイアログの名前になる。color-scheme の `legend` と同じく、`<span>` など見出しの中に置ける要素で差し込む
 - 見出しの水準は `<h2>` に固定する。ダイアログの題の水準を、どのダイアログでも揃えるため。水準を変える引数は持たない
 - それ以外の子要素は `<dialog>` の直下、`<h2>` と閉じるボタンの間へ移る

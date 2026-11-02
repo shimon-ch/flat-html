@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+import { TemplateError } from "../src/index.ts";
 import {
   assetResolver,
   expand,
@@ -201,4 +202,450 @@ test("詰めて書かれた <head> への集約では空白を足さない", asy
     '<!DOCTYPE html><html><head><title>t</title><link rel="stylesheet" href="/a.css"></head>' +
       '<body><p>x</p><div data-flat="a">a</div></body></html>',
   );
+});
+
+test("レイアウトの <head> の子が集約する資産だけで、それが末尾へ移っても、字下げは保たれる", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      '    <link rel="layout" href="base.html" />',
+      "  </head>",
+      "  <body>",
+      "    <flat-a></flat-a>",
+      "  </body>",
+      "</html>",
+    ),
+    {
+      resolveLayout: layouts({
+        "base.html": lines(
+          "<!doctype html>",
+          "<html>",
+          "  <head>",
+          '    <link rel="stylesheet" href="/site.css" />',
+          "  </head>",
+          "  <body><slot></slot></body>",
+          "</html>",
+        ),
+      }),
+      resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }),
+    },
+  );
+  expect(headOf(result.html)).toBe(
+    lines(
+      "<head>",
+      '    <link rel="stylesheet" href="/site.css">',
+      '    <link rel="stylesheet" href="/a.css">',
+      "  </head>",
+    ),
+  );
+});
+
+test("1 行で書いた <head> への集約では改行を足さない", async () => {
+  const result = await page(
+    "<!doctype html><html><head> <title>t</title></head><body><flat-a></flat-a></body></html>",
+    { resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }) },
+  );
+  expect(headOf(result.html)).toBe(
+    '<head> <title>t</title><link rel="stylesheet" href="/a.css"></head>',
+  );
+});
+
+test("<head> がコメントで始まっても、集約した資産は <head> の字下げで入る", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      '    <!-- c --><meta charset="utf-8">',
+      "    <title>t</title>",
+      "  </head>",
+      "  <body>",
+      "    <flat-a></flat-a>",
+      "  </body>",
+      "</html>",
+    ),
+    { resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }) },
+  );
+  expect(headOf(result.html)).toBe(
+    lines(
+      "<head>",
+      '    <!-- c --><meta charset="utf-8">',
+      "    <title>t</title>",
+      '    <link rel="stylesheet" href="/a.css">',
+      "  </head>",
+    ),
+  );
+});
+
+test("<head> の唯一の子の <template if> が偽で消えても、集約した資産は <head> の字下げで入る", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      '    <template if="x"><title>t</title></template>',
+      "  </head>",
+      "  <body><flat-a></flat-a></body>",
+      "</html>",
+    ),
+    {
+      data: { x: false },
+      resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }),
+    },
+  );
+  expect(headOf(result.html)).toBe(
+    lines("<head>", '    <link rel="stylesheet" href="/a.css">', "  </head>"),
+  );
+});
+
+test("<head> の素の <template> の中の資産は集約しない", async () => {
+  const html = doc(
+    '<title>t</title><template><link rel="stylesheet" href="/t.css"></template>',
+    "<p>x</p>",
+  );
+  const result = await page(html);
+  expect(squash(result.html)).toBe(squash(html));
+});
+
+test("<template shadowrootmode> の中の資産は集約せず、影の木に残す", async () => {
+  const html = doc(
+    "<title>t</title>",
+    '<x-card><template shadowrootmode="open"><link rel="stylesheet" href="/card.css"><p>c</p></template></x-card>',
+  );
+  const result = await page(html);
+  expect(squash(result.html)).toBe(squash(html));
+});
+
+test("テンプレートの素の <template> の中の資産も <template if> の中の資産も、テンプレートの位置から URL を解決する", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const result = await page(doc("<title>t</title>", '<flat-a on="yes"></flat-a>'), {
+    resolve: templates({
+      a:
+        '<div><template><link rel="stylesheet" href="./inert.css"></template>' +
+        '<template if="on"><link rel="stylesheet" href="./on.css"></template></div>',
+    }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([
+    { specifier: "./inert.css", fromPath: "templates/a.html" },
+    { specifier: "./on.css", fromPath: "templates/a.html" },
+  ]);
+  expect(squash(result.html)).toBe(
+    squash(
+      doc(
+        '<title>t</title><link rel="stylesheet" href="/fs/templates/on.css">',
+        '<div data-flat="a"><template><link rel="stylesheet" href="/fs/templates/inert.css"></template></div>',
+      ),
+    ),
+  );
+});
+
+test("テンプレートの <template shadowrootmode> の中の資産は、テンプレートの位置から URL を解決し、集約せずに影の木に残す", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const result = await page(doc("<title>t</title>", "<flat-card></flat-card>"), {
+    resolve: templates({
+      card:
+        '<x-card><template shadowrootmode="open"><link rel="stylesheet" href="./card.css">' +
+        "<slot></slot></template></x-card>",
+    }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([{ specifier: "./card.css", fromPath: "templates/card.html" }]);
+  expect(squash(result.html)).toBe(
+    squash(
+      doc(
+        "<title>t</title>",
+        '<x-card data-flat="card"><template shadowrootmode="open">' +
+          '<link rel="stylesheet" href="/fs/templates/card.css"><slot></slot></template></x-card>',
+      ),
+    ),
+  );
+});
+
+/** どの指定子も解決できない `resolveAsset`。 */
+const unresolvable = (): Promise<string | null> => Promise.resolve(null);
+
+test("テンプレートのファイルの指定子が解決できなければ、テンプレートのパスと行を添えて例外になる", async () => {
+  const result = page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({
+      a: lines("<div>a</div>", '<link rel="stylesheet" href="./indx.css">'),
+    }),
+    resolveAsset: unresolvable,
+  });
+  await expect(result).rejects.toBeInstanceOf(TemplateError);
+  await expect(result).rejects.toThrow("templates/a.html:2: 資産 ./indx.css が見つからない");
+});
+
+test("レイアウトのファイルの指定子が解決できなければ、レイアウトのパスと行を添えて例外になる", async () => {
+  const result = page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"></head><body></body></html>',
+    {
+      resolveLayout: layouts({
+        "base.html": lines(
+          "<!doctype html>",
+          "<html>",
+          "<head>",
+          '<link rel="stylesheet" href="@scope/missing/index.css">',
+          "</head>",
+          "<body><slot></slot></body>",
+          "</html>",
+        ),
+      }),
+      resolveAsset: unresolvable,
+    },
+  );
+  await expect(result).rejects.toBeInstanceOf(TemplateError);
+  await expect(result).rejects.toThrow(
+    "layouts/base.html:4: 資産 @scope/missing/index.css が見つからない",
+  );
+});
+
+test("/ で始まる URL とスキーム付きの URL は解決を問わないので、解決できなくても例外にならない", async () => {
+  const result = await page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({
+      a:
+        '<link rel="stylesheet" href="/root.css">' +
+        '<link rel="stylesheet" href="https://example.com/x.css"><div>a</div>',
+    }),
+    resolveAsset: unresolvable,
+  });
+  expect(squash(result.html)).toBe(
+    squash(
+      doc(
+        '<title>t</title><link rel="stylesheet" href="/root.css">' +
+          '<link rel="stylesheet" href="https://example.com/x.css">',
+        '<div data-flat="a">a</div>',
+      ),
+    ),
+  );
+});
+
+test("{{ }} を含む資産の URL は解決せず、式の評価の後の URL のまま残る", async () => {
+  const fromLayout = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"></head><body><p>x</p></body></html>',
+    {
+      data: { base: "/flat-html/" },
+      resolveLayout: layouts({
+        "base.html":
+          '<!doctype html><html><head><link rel="stylesheet" href="{{ base }}theme.css"></head>' +
+          "<body><slot></slot></body></html>",
+      }),
+      resolveAsset: unresolvable,
+    },
+  );
+  expect(headOf(fromLayout.html)).toBe(
+    '<head><link rel="stylesheet" href="/flat-html/theme.css"></head>',
+  );
+
+  const fromTemplate = await page(doc("<title>t</title>", '<flat-x theme="/dark.css"></flat-x>'), {
+    resolve: templates({ x: '<link rel="stylesheet" href="{{ theme }}"><div>x</div>' }),
+    resolveAsset: unresolvable,
+  });
+  expect(squash(fromTemplate.html)).toBe(
+    squash(
+      doc('<title>t</title><link rel="stylesheet" href="/dark.css">', '<div data-flat="x">x</div>'),
+    ),
+  );
+});
+
+test("資産の指定子に文字参照で書いた波括弧は、{ と } として解決に渡り、解決した URL では文字参照で出る", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const result = await page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({ a: '<link rel="stylesheet" href="./&#123;a&#125;.css"><div>a</div>' }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([{ specifier: "./{a}.css", fromPath: "templates/a.html" }]);
+  expect(result.html).toContain('<link rel="stylesheet" href="/fs/templates/&#123;a&#125;.css">');
+});
+
+test("ページに文字参照で書いた /&#123;a&#125;.css と、テンプレートの資産を解決した /{a}.css は、同じ URL として 1 つにまとまる", async () => {
+  const result = await page(
+    doc('<title>t</title><link rel="stylesheet" href="/&#123;a&#125;.css">', "<flat-a></flat-a>"),
+    {
+      resolve: templates({ a: '<link rel="stylesheet" href="./&#123;a&#125;.css"><div>a</div>' }),
+      resolveAsset: () => Promise.resolve("/{a}.css"),
+    },
+  );
+  expect(result.html.match(/<link /g)).toHaveLength(1);
+  expect(result.html).toContain('<link rel="stylesheet" href="/&#123;a&#125;.css">');
+});
+
+test("ページに書いた /a{b}.css と、テンプレートの ./a{b}.css を解決した /a{b}.css は、同じ URL として 1 つにまとまる", async () => {
+  const result = await page(
+    doc('<title>t</title><link rel="stylesheet" href="/a{b}.css">', "<flat-a></flat-a>"),
+    {
+      resolve: templates({ a: '<link rel="stylesheet" href="./a{b}.css"><div>a</div>' }),
+      resolveAsset: () => Promise.resolve("/a{b}.css"),
+    },
+  );
+  expect(squash(result.html)).toBe(
+    squash(
+      doc('<title>t</title><link rel="stylesheet" href="/a{b}.css">', '<div data-flat="a">a</div>'),
+    ),
+  );
+});
+
+test("resolveAsset が返した URL に ? から後ろがあれば、書かれた ? から後ろを & でつなぎ、返した # から後ろを残す。書かれた # から後ろは、返した # から後ろを置き換える", async () => {
+  const urls: Record<string, string> = {
+    "./a.css": "/a.css?v=hash",
+    "./b.css": "/b.css?v=1#r",
+    "./c.css": "/c.css?v=1#r",
+  };
+  const result = await page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({
+      a:
+        '<link rel="stylesheet" href="./a.css?inline">' +
+        '<link rel="preload" href="./b.css?q" as="style">' +
+        '<link rel="preload" href="./c.css#w" as="style"><div>a</div>',
+    }),
+    resolveAsset: (specifier) => Promise.resolve(urls[specifier] ?? null),
+  });
+  expect(headOf(result.html)).toBe(
+    '<head><title>t</title><link rel="stylesheet" href="/a.css?v=hash&amp;inline">' +
+      '<link rel="preload" href="/b.css?v=1&amp;q#r" as="style">' +
+      '<link rel="preload" href="/c.css?v=1#w" as="style"></head>',
+  );
+});
+
+test("resolveAsset にはパスの部分だけが渡り、? から後ろは書かれたまま付け直される。文字参照の波括弧は区切りにならない", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const result = await page(doc("<title>t</title>", '<flat-a v="1"></flat-a>'), {
+    resolve: templates({
+      a: '<link rel="stylesheet" href="./a.css?v={{ v }}#&#123;&#123;v&#125;&#125;"><div>a</div>',
+    }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([{ specifier: "./a.css", fromPath: "templates/a.html" }]);
+  expect(headOf(result.html)).toBe(
+    '<head><title>t</title><link rel="stylesheet" href="/fs/templates/a.css?v=1#&#123;&#123;v&#125;&#125;"></head>',
+  );
+});
+
+test("<template html> の値から生まれた <template if> の中の資産は、描画を通らないので <head> へ移さない", async () => {
+  const raw = '<template if="x"><link rel="stylesheet" href="/client.css"></template>';
+  const result = await page(doc("<title>t</title>", '<template html="raw"></template>'), {
+    data: { raw, x: true },
+  });
+  expect(result.html).toBe(
+    `<!DOCTYPE html><html><head><title>t</title></head><body>${raw}</body></html>`,
+  );
+});
+
+test("パスの部分に {{ を含まない資産は、? から後ろに {{ }} があっても解決し、評価の後に値が付く", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const result = await page(doc("<title>t</title>", '<flat-a version="1" name="x"></flat-a>'), {
+    resolve: templates({
+      a:
+        '<link rel="stylesheet" href="./card.css?v={{ version }}">' +
+        '<link rel="stylesheet" href="./{{ name }}.css"><div>a</div>',
+    }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([{ specifier: "./card.css", fromPath: "templates/a.html" }]);
+  expect(headOf(result.html)).toBe(
+    '<head><title>t</title><link rel="stylesheet" href="/fs/templates/card.css?v=1">' +
+      '<link rel="stylesheet" href="./x.css"></head>',
+  );
+});
+
+test("<template html> の中身の資産は描画で捨てられるので解決せず、解決できなくても例外にならない", async () => {
+  const result = await page(doc("<title>t</title>", '<flat-a r="<b>r</b>"></flat-a>'), {
+    resolve: templates({
+      a: '<div><template html="r"><link rel="stylesheet" href="./fallback.css"></template></div>',
+    }),
+    resolveAsset: unresolvable,
+  });
+  expect(squash(result.html)).toBe(
+    squash(doc("<title>t</title>", '<div data-flat="a"><b>r</b></div>')),
+  );
+});
+
+test("resolveAsset が投げた例外は、その文言を理由として添え、資産を書いたファイルと行の TemplateError になる", async () => {
+  const result = page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({
+      a: lines("<div>a</div>", '<link rel="stylesheet" href="pkg/dist/x.css">'),
+    }),
+    resolveAsset: () =>
+      Promise.reject(new Error('Missing "./dist/x.css" specifier in "pkg" package')),
+  });
+  await expect(result).rejects.toBeInstanceOf(TemplateError);
+  await expect(result).rejects.toThrow(
+    'templates/a.html:2: 資産 pkg/dist/x.css を解決できない: Missing "./dist/x.css" specifier in "pkg" package',
+  );
+});
+
+test("resolveAsset が Error でない値を投げたら、JSON で表せればその JSON を、表せなければ String の結果を理由にする", async () => {
+  const cases: Array<[thrown: unknown, reason: string]> = [
+    [{ code: 1 }, '{"code":1}'],
+    [{ name: "Error", message: "別の realm の Error" }, "別の realm の Error"],
+    [undefined, "undefined"],
+  ];
+  for (const [thrown, reason] of cases) {
+    const result = page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+      resolve: templates({
+        a: lines("<div>a</div>", '<link rel="stylesheet" href="pkg/x.css">'),
+      }),
+      resolveAsset: () => Promise.reject(thrown),
+    });
+    await expect(result).rejects.toBeInstanceOf(TemplateError);
+    await expect(result).rejects.toThrow(
+      `templates/a.html:2: 資産 pkg/x.css を解決できない: ${reason}`,
+    );
+  }
+});
+
+test("resolveAsset が TemplateError を投げたら、パスと行を重ねず、そのまま投げる", async () => {
+  const error = new TemplateError("x.css が壊れている", "styles/x.css", 3);
+  const result = page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({ a: lines("<div>a</div>", '<link rel="stylesheet" href="./x.css">') }),
+    resolveAsset: () => Promise.reject(error),
+  });
+  await expect(result).rejects.toBe(error);
+  await expect(result).rejects.toThrow(/^styles\/x\.css:3: x\.css が壊れている$/);
+});
+
+test("素の <template> の中の <template html> は描画されず中身が残るので、その中身の資産も解決する", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const inner = (href: string): string =>
+    `<div><template><template html="x"><link rel="stylesheet" href="${href}"></template></template></div>`;
+  const result = await page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({ a: inner("./inner.css") }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([{ specifier: "./inner.css", fromPath: "templates/a.html" }]);
+  expect(squash(result.html)).toBe(
+    squash(
+      doc(
+        "<title>t</title>",
+        inner("/fs/templates/inner.css").replace("<div>", '<div data-flat="a">'),
+      ),
+    ),
+  );
+});
+
+test("1 回の変換の中では、同じファイルの同じ指定子を 1 回だけ解決する", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"></head>' +
+      "<body><flat-a></flat-a><flat-a></flat-a><flat-b></flat-b></body></html>",
+    {
+      resolveLayout: layouts({
+        "base.html":
+          '<!doctype html><html><head><link rel="stylesheet" href="./base.css"></head>' +
+          '<body><link rel="stylesheet" href="./base.css"><slot></slot></body></html>',
+      }),
+      resolve: templates({
+        a: '<link rel="stylesheet" href="./a.css"><link rel="stylesheet" href="./a.css"><div>a</div>',
+        b: '<link rel="stylesheet" href="./a.css"><div>b</div>',
+      }),
+      resolveAsset,
+    },
+  );
+  expect(calls).toEqual([
+    { specifier: "./base.css", fromPath: "layouts/base.html" },
+    { specifier: "./a.css", fromPath: "templates/a.html" },
+    { specifier: "./a.css", fromPath: "templates/b.html" },
+  ]);
 });

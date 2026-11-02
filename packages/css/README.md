@@ -19,7 +19,7 @@ class なしで使える CSS。正しい HTML を書けばそのまま整う。
 
 ## 層
 
-`flat.css` が `@layer reset, base, components, site;` を宣言する。順序はここでだけ決まり、後の層が必ず勝つ。
+層を使うスタイルシートは、どれも冒頭で同じ順序 `@layer reset, base, components, site;` を宣言する（ADR-0024）。`flat.css` もその 1 つ。宣言は冪等なので、どのファイルが先に読み込まれても順序は変わらず、後の層が必ず勝つ。
 
 | 層 | 中身 |
 |---|---|

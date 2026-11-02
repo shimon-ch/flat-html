@@ -1,5 +1,4 @@
-import { access, readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { TemplateSource } from "./transform/index.ts";
 
@@ -44,31 +43,35 @@ export function resolveLayoutFile(
   return readIfExists(file);
 }
 
-async function exists(file: string): Promise<boolean> {
+async function isFile(file: string): Promise<boolean> {
   try {
-    await access(file);
-    return true;
+    return (await stat(file)).isFile();
   } catch {
     return false;
   }
 }
 
 /**
- * テンプレートやレイアウトに書かれた資産の指定子を、そのファイル `fromPath` の位置を基準に実ファイルへ解決する。
- * `./` `../` で始まる相対パスはファイルシステムで、それ以外（`@scope/pkg/path`、`pkg/path`）は
- * `fromPath` から見た Node の解決規則で探す。見つからなければ null。
+ * パッケージ名の指定子 `id` を、ファイル `importer` から見て解決し、解決先のパスを返す。見つからなければ `undefined`。
+ * 解決できない理由が分かるとき（`exports` にないサブパスなど）は、その理由を文言に持つ例外を投げる。
+ * プラグインは Vite の解決器（`config.createResolver()`）を渡す。
+ */
+export type ResolvePackage = (id: string, importer: string) => Promise<string | undefined>;
+
+/**
+ * テンプレートやレイアウトに書かれた資産の指定子を、そのファイル `fromPath` の位置を基準に実ファイルへ解決し、絶対パスを返す（ADR-0034）。
+ * `specifier` はパスの部分だけで、`?` と `#` から後ろを含まない。`transform` が外して渡し、URL に付け直す。
+ * `./` `../` で始まる相対パスはファイルシステムで、それ以外（`@scope/pkg/path`、`pkg/path`、`#` で始まるサブパス、Vite の別名）は
+ * `resolvePackage` で探す。解決先が実在するファイルでなければ null。`resolvePackage` が投げた例外はそのまま投げる。
  */
 export async function resolveAssetFile(
   fromPath: string,
   specifier: string,
+  resolvePackage: ResolvePackage,
 ): Promise<string | null> {
-  if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    const file = path.resolve(path.dirname(fromPath), specifier);
-    return (await exists(file)) ? file : null;
-  }
-  try {
-    return createRequire(fromPath).resolve(specifier);
-  } catch {
-    return null;
-  }
+  const file =
+    specifier.startsWith("./") || specifier.startsWith("../")
+      ? path.resolve(path.dirname(fromPath), specifier)
+      : await resolvePackage(specifier, fromPath);
+  return file !== undefined && path.isAbsolute(file) && (await isFile(file)) ? file : null;
 }

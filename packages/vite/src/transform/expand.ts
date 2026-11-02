@@ -1,4 +1,3 @@
-import { parseFragment } from "parse5";
 import { assetKey, resolveAssetUrls } from "./assets.ts";
 import {
   childrenOf,
@@ -8,13 +7,15 @@ import {
   lineOf,
   replaceWith,
   setAttr,
+  sourcePathOf,
   type ChildNode,
   type Element,
   type ParentNode,
 } from "./dom.ts";
 import { Scope } from "./evaluator.ts";
-import { render } from "./render.ts";
+import { referencedNames, render, type ExpressionCache, type RenderContext } from "./render.ts";
 import { distribute, rootElements } from "./slots.ts";
+import { parseFragmentSource, unmarkBraces } from "./source.ts";
 import { TemplateError, type TemplateSource, type TransformOptions } from "./types.ts";
 
 /** 展開の間だけ生きる文脈。 */
@@ -23,8 +24,12 @@ export interface ExpandContext {
   resolve(name: string): Promise<TemplateSource | null>;
   /** テンプレートに書かれた資産の URL を解決する。省略時は書き換えない */
   resolveAsset: TransformOptions["resolveAsset"];
-  /** 走査している入力のファイルパス。エラー表示に使う */
+  /** 走査している入力のファイルパス。書いたファイルの記録がないノードのエラー表示に使う */
   path: string | undefined;
+  /** 構文解析した式の控え。1 回の変換の中で共有する */
+  expressions: ExpressionCache;
+  /** テンプレートのソースの文字列から、そのテンプレートが式で使う名前（`referencedNames`）を引く控え。1 回の変換の中で共有する */
+  referenced: Map<string, ReadonlySet<string>>;
 }
 
 const PREFIX = "flat-";
@@ -58,6 +63,29 @@ export async function expandReferences(
   }
 }
 
+/**
+ * `source` を解析したテンプレート `fragment` が式で使う名前を返す。描画より前に呼ぶ。
+ * 同じソースの文字列のテンプレートは、1 回の変換の中で 1 回だけ数え、`cache` の結果を使い回す。
+ * パスが同じでもソースが違えば別に数える。
+ */
+function namesUsedBy(
+  source: string,
+  fragment: ParentNode,
+  renderContext: RenderContext,
+  cache: ExpandContext["referenced"],
+): ReadonlySet<string> {
+  const cached = cache.get(source);
+  if (cached !== undefined) return cached;
+  const names = referencedNames(fragment, renderContext);
+  cache.set(source, names);
+  return names;
+}
+
+/**
+ * 参照タグ `el` を 1 つ展開し、置き換えるノードを返す。
+ * テンプレートの字面で式に使われない引数は、資産でない根要素へ透過する（ADR-0010 / ADR-0033）。
+ * 資産の要素（ADR-0023）は、透過する引数のうち `slot` だけを受け取り、根要素と同じ差し込み先へ入る（ADR-0033）。
+ */
 async function expandOne(
   el: Element,
   name: string,
@@ -66,18 +94,27 @@ async function expandOne(
 ): Promise<ChildNode[]> {
   const template = await ctx.resolve(name);
   if (!template) {
-    throw new TemplateError(`<flat-${name}> のテンプレートが見つからない`, ctx.path, lineOf(el));
+    throw new TemplateError(
+      `<flat-${name}> のテンプレートが見つからない`,
+      sourcePathOf(el, ctx.path),
+      lineOf(el),
+    );
   }
-  const fragment = parseFragment(template.source, { sourceCodeLocationInfo: true });
+  const fragment = parseFragmentSource(template.source, template.path);
   if (ctx.resolveAsset) await resolveAssetUrls(fragment, template.path, ctx.resolveAsset);
-  const args = Object.fromEntries(el.attrs.map((a) => [a.name, a.value]));
-  const scope = new Scope(args);
-  render(fragment, scope, template.path);
+  const args = Object.fromEntries(el.attrs.map((a) => [a.name, unmarkBraces(a.value)]));
+  const renderContext = { path: template.path, expressions: ctx.expressions };
+  const used = namesUsedBy(template.source, fragment, renderContext, ctx.referenced);
+  render(fragment, new Scope(args), renderContext);
   await expandReferences(fragment, { ...ctx, path: template.path }, [...stack, name]);
   distribute(fragment, childrenOf(el));
 
-  const passthrough = el.attrs.filter((a) => !scope.used.has(a.name));
-  for (const root of rootElements(fragment).filter((r) => assetKey(r) === undefined)) {
+  const passthrough = el.attrs.filter((a) => !used.has(a.name));
+  const roots = rootElements(fragment);
+  for (const asset of roots.filter((r) => assetKey(r) !== undefined)) {
+    for (const attr of passthrough) if (attr.name === "slot") setAttr(asset, attr.name, attr.value);
+  }
+  for (const root of roots.filter((r) => assetKey(r) === undefined)) {
     for (const attr of passthrough) {
       const existing = attr.name === "class" ? getAttr(root, "class") : undefined;
       setAttr(root, attr.name, existing ? `${existing} ${attr.value}` : attr.value);

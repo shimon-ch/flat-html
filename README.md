@@ -1,6 +1,6 @@
 # flat-html
 
-素朴な HTML 部品群のモノレポ。設計段階で、実装はまだない。
+素朴な HTML 部品群のモノレポ。見本サイトは https://shimon-ch.github.io/flat-html/ 。npm にはまだ公開していない（ADR-0027）。
 
 | パッケージ | 役割 |
 |---|---|

@@ -1,6 +1,11 @@
 import path from "node:path";
 import type { Plugin, ResolvedConfig, ViteDevServer } from "vite";
-import { resolveAssetFile, resolveLayoutFile, resolveTemplate } from "./resolve.ts";
+import {
+  resolveAssetFile,
+  resolveLayoutFile,
+  resolveTemplate,
+  type ResolvePackage,
+} from "./resolve.ts";
 import { transform, type TransformResult } from "./transform/index.ts";
 
 export { TemplateError, transform } from "./transform/index.ts";
@@ -14,16 +19,49 @@ export interface FlatHtmlOptions {
   data?: Record<string, unknown>;
 }
 
+/** `file` が `dir` の中にあるか。 */
+function isInside(dir: string, file: string): boolean {
+  const relative = path.relative(dir, file);
+  return (
+    relative !== "" &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
 /**
- * 解決した資産の絶対パスを、Vite が読み込める URL にする。
- *
- * 開発サーバーでもビルドでも `/@fs/<絶対パス>` の形にする。Vite の root の外にあるファイル
- * （別パッケージのコンポーネントの CSS など）を指せて、開発サーバー（そのまま配信する）と
- * ビルド（import として解決し、ハッシュ付きの資産に出し直す）の両方が受け付ける形のため。
- * `base` は付けない。開発サーバーでは Vite 自身の HTML 変換が `/` で始まる URL に付ける。
+ * 解決した資産の絶対パス `file` を、ページのファイル `page` に書く URL にする（ADR-0034）。
+ * `file` が `config.root` の中にあれば、開発サーバーでもビルドでも、`/` で始まる root からの相対パスを返す。
+ * root の外にあれば、ビルド（`config.command` が `"build"`）では `page` のディレクトリからの、`./` か `../` で始まる相対パスを返す。
+ * 開発サーバーで root の外にあるときと、ドライブが違って相対パスにできないときは `/@fs/<絶対パス>` を返す。
+ * 区切りはどれも `/` で、`base` は付けない（ADR-0034）。
+ * `page` は開発サーバーでは実在するファイルとは限らない（`pageFileOf`）ので、開発サーバーの URL は `page` に頼らない。
  */
-function assetUrl(file: string): string {
+function assetUrl(file: string, page: string, config: ResolvedConfig): string {
+  if (isInside(config.root, file)) {
+    return `/${path.relative(config.root, file).replaceAll(path.sep, "/")}`;
+  }
+  const relative = path.relative(path.dirname(page), file);
+  if (config.command === "build" && !path.isAbsolute(relative)) {
+    const url = relative.replaceAll(path.sep, "/");
+    return url.startsWith("../") ? url : `./${url}`;
+  }
   return `/@fs/${file.replaceAll(path.sep, "/").replace(/^\//, "")}`;
+}
+
+/**
+ * `transformIndexHtml` の `ctx.filename` から、ページのファイルのパスを求める（ADR-0034）。
+ * 末尾が `/` か、Vite の root そのものならディレクトリとみなし、その中の `index.html` を返す。それ以外はそのまま返す。
+ * Vite が相対 URL の基準をディレクトリとみなす条件（`getHtmlDirnameForRelativeUrl` の末尾 `/`）と揃える。
+ * `server.transformIndexHtml('/', html)` では root、`'/pages/x/'` では末尾が `/` のパス、`'/about'` では `<root>/about` が渡る。
+ */
+function pageFileOf(filename: string, root: string): string {
+  const isDirectory =
+    filename.endsWith("/") ||
+    filename.endsWith(path.sep) ||
+    path.resolve(filename) === path.resolve(root);
+  return isDirectory ? path.join(filename, "index.html") : filename;
 }
 
 /** 解決一覧を 1 行ずつの文字列にする。パスは Vite の root からの相対で出す。 */
@@ -41,6 +79,7 @@ function formatResolved(root: string, result: TransformResult): string[] {
  */
 export function flatHtml(options: FlatHtmlOptions): Plugin {
   let config: ResolvedConfig;
+  let resolvePackage: ResolvePackage;
   let server: ViteDevServer | undefined;
   const watched = new Set<string>();
   const logged = new Set<string>();
@@ -49,6 +88,7 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
     name: "flat-html",
     configResolved(resolved) {
       config = resolved;
+      resolvePackage = resolved.createResolver();
     },
     configureServer(devServer) {
       server = devServer;
@@ -62,15 +102,15 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
       order: "pre",
       async handler(html, ctx) {
         const roots = options.roots.map((r) => path.resolve(config.root, r));
+        const page = pageFileOf(ctx.filename, config.root);
         const result = await transform(html, {
-          path: ctx.filename,
+          path: page,
           data: options.data,
           resolve: (name) => resolveTemplate(roots, name),
-          resolveLayout: (href, fromPath) =>
-            resolveLayoutFile(config.root, fromPath ?? ctx.filename, href),
+          resolveLayout: (href, fromPath) => resolveLayoutFile(config.root, fromPath ?? page, href),
           resolveAsset: async (specifier, fromPath) => {
-            const file = await resolveAssetFile(fromPath, specifier);
-            return file === null ? null : assetUrl(file);
+            const file = await resolveAssetFile(fromPath, specifier, resolvePackage);
+            return file === null ? null : assetUrl(file, page, config);
           },
         });
 

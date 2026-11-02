@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import { TemplateError } from "../src/index.ts";
-import { expand } from "./helpers.ts";
+import { expand, headOf, layouts, lines, page, templates } from "./helpers.ts";
 
 test("{{ }} はテキストと属性値で使え、常に HTML エスケープされる", async () => {
   const html = await expand('<p title="{{ t }}">{{ t }}</p>', {}, { t: '<b>"&' });
@@ -42,6 +42,72 @@ test("<template each> は item を導入して繰り返す", async () => {
 test("<template html> は生の HTML を差し込む", async () => {
   const html = await expand('<div><template html="raw"></template></div>', {}, { raw: "<b>r</b>" });
   expect(html).toBe("<div><b>r</b></div>");
+});
+
+test("<head> の <template if> が偽、<template each> が空で消えるとき、空行を残さない", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      "    <title>t</title>",
+      '    <template if="dev"><script type="module" src="/dev.js"></script></template>',
+      '    <template each="s of scripts"><script type="module" src="{{ s }}"></script></template>',
+      "  </head>",
+      "  <body></body>",
+      "</html>",
+    ),
+    { data: { dev: false, scripts: [] } },
+  );
+  expect(headOf(result.html)).toBe(lines("<head>", "    <title>t</title>", "  </head>"));
+});
+
+test("<head> の <template html> の結果が空、<template if> が真で中身が空のとき、空行を残さない", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      "    <title>t</title>",
+      '    <template html="raw"></template>',
+      '    <template if="dev"></template>',
+      "  </head>",
+      "  <body></body>",
+      "</html>",
+    ),
+    { data: { raw: "", dev: true } },
+  );
+  expect(headOf(result.html)).toBe(lines("<head>", "    <title>t</title>", "  </head>"));
+});
+
+test("<head> の <template if> の中の参照が空白だけを出すとき、空行を残さない", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      "    <title>t</title>",
+      '    <template if="dev"><flat-empty></flat-empty></template>',
+      "  </head>",
+      "  <body></body>",
+      "</html>",
+    ),
+    {
+      data: { dev: true },
+      resolve: templates({ empty: '<template if="show"><meta name="x"></template>\n' }),
+    },
+  );
+  expect(headOf(result.html)).toBe(lines("<head>", "    <title>t</title>", "  </head>"));
+});
+
+test("<body> では、参照が空白だけを出しても、その空白を残す", async () => {
+  const result = await page(
+    "<!doctype html><html><head></head><body><p>a</p><flat-empty></flat-empty><p>b</p></body></html>",
+    { resolve: templates({ empty: '<template if="show"><i>x</i></template>\n' }) },
+  );
+  expect(result.html).toBe(
+    "<!DOCTYPE html><html><head></head><body><p>a</p>\n<p>b</p></body></html>",
+  );
 });
 
 test("関数呼び出し・算術・代入は構文エラーとしてパスと行つきで失敗する", async () => {
@@ -137,4 +203,189 @@ test("参照タグの属性も消え、コンポーネントからは引数が�
     { title: null },
   );
   expect(html).toBe('<p data-flat="x">x</p>');
+});
+
+const nested = [
+  { name: "a", ok: true, tags: ["x", "y"] },
+  { name: "b", ok: false, tags: [] },
+];
+
+test("<template each> の中の <template if> も、繰り返しごとに評価される", async () => {
+  const html = await expand(
+    '<ul><template each="i of items"><template if="i.ok"><li>{{ i.name }}</li></template></template></ul>',
+    {},
+    { items: nested },
+  );
+  expect(html).toBe("<ul><li>a</li></ul>");
+});
+
+test("<template each> の中の <template each> も、繰り返しごとに評価される", async () => {
+  const html = await expand(
+    '<template each="i of items"><template each="t of i.tags"><b>{{ i.name }}{{ t }}</b></template></template>',
+    {},
+    { items: nested },
+  );
+  expect(html).toBe("<b>ax</b><b>ay</b>");
+});
+
+test("<template each> の中の素の <template> は、中身ごと複製されて不活性のまま残る", async () => {
+  const html = await expand(
+    '<template each="i of items"><template><i>{{ i.name }}</i></template></template>',
+    {},
+    { items: nested },
+  );
+  expect(html).toBe(
+    "<template><i>{{ i.name }}</i></template><template><i>{{ i.name }}</i></template>",
+  );
+});
+
+test("<script> の中の {{ }} は展開せず書かれたまま出す。<script> の属性は展開する", async () => {
+  const html = await expand(
+    '<script type="application/ld+json" id="{{ id }}">{"name":"{{ t }}"}</script>',
+    {},
+    { id: "ld", t: "</script><script>alert(1)</script>" },
+  );
+  expect(html).toBe('<script type="application/ld+json" id="ld">{"name":"{{ t }}"}</script>');
+});
+
+test("<style> の中の {{ }} は展開せず書かれたまま出す。<style> の属性は展開する", async () => {
+  const html = await expand(
+    '<style media="{{ m }}">p{color:{{ c }}}</style>',
+    {},
+    { m: "print", c: "red" },
+  );
+  expect(html).toBe('<style media="print">p{color:{{ c }}}</style>');
+});
+
+test("中身に {{ を含むインラインスクリプトは、ページでもテンプレートでも失敗しない", async () => {
+  const script = "<script>function f(){{let a=1}}</script>";
+  expect(await expand(script, {})).toBe(script);
+  expect(await expand('<flat-x a="1"></flat-x>', { x: `<div>${script}</div>` })).toBe(
+    `<div a="1" data-flat="x">${script}</div>`,
+  );
+});
+
+test("直列化でエスケープされない要素の中は展開しない。<title> と <textarea> の中は展開する", async () => {
+  for (const tag of ["style", "script", "xmp", "iframe", "noembed", "noframes", "noscript"]) {
+    expect(await expand(`<${tag}>{{ x }}</${tag}>`, {}, { x: "X" })).toBe(
+      `<${tag}>{{ x }}</${tag}>`,
+    );
+  }
+  expect(await expand("<plaintext>{{ x }}", {}, { x: "X" })).toBe("<plaintext>{{ x }}</plaintext>");
+  expect(await expand("<title>{{ x }}</title><textarea>{{ x }}</textarea>", {}, { x: "<X>" })).toBe(
+    "<title>&lt;X&gt;</title><textarea>&lt;X&gt;</textarea>",
+  );
+});
+
+test("<template if> で引数があるかは != undefined で調べる。値のない属性でも真になる", async () => {
+  const html = await expand("<flat-x open></flat-x><flat-x></flat-x>", {
+    x: '<p><template if="open != undefined">open</template></p>',
+  });
+  expect(html).toBe('<p data-flat="x">open</p><p data-flat="x"></p>');
+});
+
+test("undefined はリテラルで、同名のデータや引数があってもそれを指さない", async () => {
+  const fromData = await expand(
+    '<template if="open != undefined">open</template>',
+    {},
+    { undefined: "u" },
+  );
+  expect(fromData).toBe("");
+
+  const fromArg = await expand('<flat-x undefined="u"></flat-x>', {
+    x: "<p>{{ open == undefined }}</p>",
+  });
+  expect(fromArg).toBe('<p undefined="u" data-flat="x">true</p>');
+});
+
+test("文字参照で書いた波括弧は {{ }} の区切りにならず、テキストと属性値に文字参照のまま出る", async () => {
+  const html = await expand(
+    '<p title="&#123;&#123; title &#125;&#125;">&#123;&#123; title &#125;&#125;</p>',
+    {},
+    { title: "T" },
+  );
+  expect(html).toBe(
+    '<p title="&#123;&#123; title &#125;&#125;">&#123;&#123; title &#125;&#125;</p>',
+  );
+});
+
+test("文字参照の波括弧と並べても、そのまま書いた {{ }} は展開される", async () => {
+  const html = await expand(
+    '<p title="{{ title }} &#123;&#123; title &#125;&#125;">{{ title }} &#123;&#123; title &#125;&#125;</p>',
+    {},
+    { title: "T" },
+  );
+  expect(html).toBe(
+    '<p title="T &#123;&#123; title &#125;&#125;">T &#123;&#123; title &#125;&#125;</p>',
+  );
+});
+
+test("10 進、16 進、名前のどの文字参照も、末尾の ; を省いた数値参照も、区切りにならない", async () => {
+  const html = await expand(
+    "<p>&#x7b;&#X7B; a &#0125;&rcub; &lbrace;&lcub; b &#x7D&#125 &#1234;</p>",
+    {},
+    { a: "A", b: "B" },
+  );
+  expect(html).toBe("<p>&#123;&#123; a &#125;&#125; &#123;&#123; b &#125;&#125; \u04d2</p>");
+});
+
+test("<script> と <style> とコメントの中の文字参照は、書かれたまま残る", async () => {
+  const html =
+    '<script>const s = "&#123;&#123; t &#125;&#125; &lbrace;&#x7d";</script>' +
+    '<style>p::before{content:"&lcub;"}</style><!-- &#123;&#123; t &#125;&#125; &rbrace; -->';
+  expect(await expand(html, {}, { t: "T" })).toBe(html);
+});
+
+test("テンプレートとレイアウトでも、文字参照の波括弧は区切りにならず、<script> の中は書かれたまま残る", async () => {
+  const body =
+    '<p title="&#123;&#123; a &#125;&#125;">&#123;&#123; a &#125;&#125; {{ a }}</p>' +
+    '<script>"&lbrace;&#123;"</script>';
+  const fromTemplate = await expand('<flat-x a="A"></flat-x>', { x: `<div>${body}</div>` });
+  expect(fromTemplate).toBe(
+    '<div data-flat="x"><p title="&#123;&#123; a &#125;&#125;">&#123;&#123; a &#125;&#125; A</p>' +
+      '<script>"&lbrace;&#123;"</script></div>',
+  );
+
+  const fromLayout = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"></head><body></body></html>',
+    {
+      data: { a: "A" },
+      resolveLayout: layouts({
+        "base.html": `<!doctype html><html><head></head><body>${body}<slot></slot></body></html>`,
+      }),
+    },
+  );
+  expect(fromLayout.html).toBe(
+    "<!DOCTYPE html><html><head></head><body>" +
+      '<p title="&#123;&#123; a &#125;&#125;">&#123;&#123; a &#125;&#125; A</p>' +
+      '<script>"&lbrace;&#123;"</script></body></html>',
+  );
+});
+
+test("引数と式の中では、文字参照の波括弧はただの { と } として扱う", async () => {
+  const html = await expand('<flat-x open="&#123;"></flat-x>', {
+    x: "<p><template if=\"open == '{'\">{{ '&#125;' == '}' }}</template></p>",
+  });
+  expect(html).toBe('<p data-flat="x">true</p>');
+});
+
+test("ソースに非文字 U+FDD0 か U+FDD1 があれば、パスと行を添えて例外になる", async () => {
+  const fromPage = expand("<p>\n\uFDD0</p>", {});
+  await expect(fromPage).rejects.toBeInstanceOf(TemplateError);
+  await expect(fromPage).rejects.toThrow(
+    "page.html:2: 非文字 U+FDD0 は flat-html が内部で使うので書けない",
+  );
+
+  const fromTemplate = expand("<flat-x></flat-x>", { x: "<p></p>\n\n<p>\uFDD1</p>" });
+  await expect(fromTemplate).rejects.toThrow("templates/x.html:3: 非文字 U+FDD1");
+
+  const fromLayout = page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"></head><body></body></html>',
+    {
+      resolveLayout: layouts({
+        "base.html": "<!doctype html>\n<html><head></head><body>\uFDD0</body></html>",
+      }),
+    },
+  );
+  await expect(fromLayout).rejects.toThrow("layouts/base.html:2: 非文字 U+FDD0");
 });
