@@ -3,11 +3,8 @@ import type { Expr } from "./parser.ts";
 /**
  * 式から見える変数の集合。親を持てるのは `each` が導入する変数のためで、
  * 親をたどっても名前が見つからなければ `undefined` になる。
- * 根の変数の参照は `used` に記録され、引数の透過判定に使う。
  */
 export class Scope {
-  readonly used = new Set<string>();
-
   constructor(
     private readonly vars: Record<string, unknown>,
     private readonly parent?: Scope,
@@ -18,10 +15,7 @@ export class Scope {
   }
 
   lookup(name: string): unknown {
-    if (Object.hasOwn(this.vars, name)) {
-      this.used.add(name);
-      return this.vars[name];
-    }
+    if (Object.hasOwn(this.vars, name)) return this.vars[name];
     return this.parent?.lookup(name);
   }
 }

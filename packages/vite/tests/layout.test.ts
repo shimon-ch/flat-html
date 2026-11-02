@@ -376,3 +376,39 @@ test("詰めて書かれた <head> の合流では空白を足さない", async 
       '<meta name="description" content="d"><link rel="stylesheet" href="/base.css"></head>',
   );
 });
+
+test('<head> の素の <template> の中の <link rel="layout"> はレイアウトとして使わない', async () => {
+  const html =
+    "<!doctype html><html><head><title>t</title>" +
+    '<template><link rel="layout" href="base.html"></template></head><body><p>x</p></body></html>';
+  const result = await page(html, {
+    resolveLayout: layouts({
+      "base.html":
+        "<!doctype html><html><head></head><body><main><slot></slot></main></body></html>",
+    }),
+  });
+  expect(result.layouts).toEqual([]);
+  expect(squash(result.html)).toBe(squash(html));
+});
+
+test("レイアウトの <template if> の中の <slot> には差し込む。素の <template> の中の <slot> には差し込まない", async () => {
+  for (const x of [true, false]) {
+    const result = await page(
+      '<!doctype html><html><head><link rel="layout" href="base.html"></head><body><p>c</p></body></html>',
+      {
+        data: { x },
+        resolveLayout: layouts({
+          "base.html":
+            "<!doctype html><html><head></head><body>" +
+            '<x-shell><template shadowrootmode="open"><slot></slot></template>' +
+            '<template if="x"><main><slot></slot></main></template></x-shell></body></html>',
+        }),
+      },
+    );
+    expect(result.html).toBe(
+      "<!DOCTYPE html><html><head></head><body>" +
+        '<x-shell><template shadowrootmode="open"><slot></slot></template>' +
+        `${x ? "<main><p>c</p></main>" : ""}</x-shell></body></html>`,
+    );
+  }
+});

@@ -1,4 +1,4 @@
-import { defaultTreeAdapter, type DefaultTreeAdapterTypes as T } from "parse5";
+import { defaultTreeAdapter, html, type DefaultTreeAdapterTypes as T } from "parse5";
 
 export type Node = T.Node;
 export type ChildNode = T.ChildNode;
@@ -13,9 +13,19 @@ export const isText = (node: Node): node is T.TextNode => defaultTreeAdapter.isT
 export const isTemplate = (node: Node): node is T.Template =>
   isElement(node) && node.tagName === "template" && "content" in node;
 
-/** if / each / html のいずれも持たない素の `<template>`。中身は不活性として扱う（ADR-0023）。 */
-export const isInertTemplate = (node: Node): node is T.Template =>
+/**
+ * if / each / html のいずれも持たない素の `<template>`。中身は不活性として扱う（ADR-0023）。
+ * 型の絞り込みはしない。偽のときに `<template>` でないとは言えないため。
+ */
+export const isInertTemplate = (node: Node): boolean =>
   isTemplate(node) && !["if", "each", "html"].some((name) => getAttr(node, name) !== undefined);
+
+/**
+ * 直列化で中身のテキストがエスケープされない要素（`<script>`、`<style>` など）。
+ * 判定は parse5 の serialize と同じものを使う。`parse` と `serialize` の既定に合わせ、スクリプトは有効とみなす。
+ */
+export const hasRawText = (el: Element): boolean =>
+  el.namespaceURI === html.NS.HTML && html.hasUnescapedText(el.tagName, true);
 
 /** 要素から属性値を取る。なければ `undefined`。 */
 export function getAttr(el: Element, name: string): string | undefined {
@@ -60,14 +70,23 @@ export function childrenOf(parent: ParentNode): ChildNode[] {
   return [...parent.childNodes];
 }
 
-/** 部分木を深く複製する。位置情報も写す。 */
+/** 空の中身（DocumentFragment）を持つ `<template>` 要素を作る。 */
+function createTemplate(namespaceURI: Element["namespaceURI"], attrs: Element["attrs"]): Template {
+  return {
+    ...defaultTreeAdapter.createElement("template", namespaceURI, attrs),
+    nodeName: "template",
+    tagName: "template",
+    content: defaultTreeAdapter.createDocumentFragment(),
+  };
+}
+
+/** 部分木を深く複製する。位置情報も写す。`<template>` は中身も複製する。 */
 export function cloneNode(node: ChildNode): ChildNode {
   if (isElement(node)) {
-    const el = defaultTreeAdapter.createElement(
-      node.tagName,
-      node.namespaceURI,
-      node.attrs.map((a) => ({ ...a })),
-    );
+    const attrs = node.attrs.map((a) => ({ ...a }));
+    const el = isTemplate(node)
+      ? createTemplate(node.namespaceURI, attrs)
+      : defaultTreeAdapter.createElement(node.tagName, node.namespaceURI, attrs);
     el.sourceCodeLocation = node.sourceCodeLocation;
     for (const child of node.childNodes) append(el, cloneNode(child));
     if (isTemplate(node) && isTemplate(el)) {

@@ -66,3 +66,32 @@ test("素の <template> の中にある参照は不活性のまま残す", async
   const html = await expand("<template><flat-a></flat-a></template>", { a: "<i></i>" });
   expect(html).toBe("<template><flat-a></flat-a></template>");
 });
+
+test("偽の <template if> の中で使う引数は透過しない。使われていない引数は透過する", async () => {
+  const html = await expand('<flat-x title="T" id="i"></flat-x>', {
+    x: '<div><template if="show"><h2>{{ title }}</h2></template></div>',
+  });
+  expect(html).toBe('<div id="i" data-flat="x"></div>');
+});
+
+test("空の <template each> の中で使う引数は透過しない。使われていない引数は透過する", async () => {
+  const html = await expand('<flat-x label="L" id="i"></flat-x>', {
+    x: '<ul><template each="item of items"><li title="{{ label }}">{{ item }}</li></template></ul>',
+  });
+  expect(html).toBe('<ul id="i" data-flat="x"></ul>');
+});
+
+test("|| の評価されなかった側の引数は透過しない。使われていない引数は透過する", async () => {
+  const html = await expand('<flat-x a="A" b="B" id="i"></flat-x>', {
+    x: "<p>{{ a || b }}</p>",
+  });
+  expect(html).toBe('<p id="i" data-flat="x">A</p>');
+});
+
+test("評価されない分岐の式の構文エラーも、テンプレートのパスと行で失敗する", async () => {
+  const promise = expand("<flat-x></flat-x>", {
+    x: '<div>\n<template if="show">\n{{ a() }}</template></div>',
+  });
+  await expect(promise).rejects.toBeInstanceOf(TemplateError);
+  await expect(promise).rejects.toThrow(/^templates\/x\.html:3: /);
+});

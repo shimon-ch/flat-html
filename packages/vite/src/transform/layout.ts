@@ -4,7 +4,6 @@ import {
   appendToHead,
   childrenOf,
   detachWithIndent,
-  findAll,
   findAllOutsideInertTemplates,
   findFirst,
   getAttr,
@@ -102,6 +101,7 @@ function merge(
 /**
  * `<link rel="layout">` をたどってページをレイアウトへ合流させる。多段のレイアウトは順に適用する。
  * 解決したレイアウトは `layouts` に記録する。
+ * `<link rel="layout">` は素の `<template>` の中からは探さず（ADR-0023）、`<template if/each/html>` の中からは探す。
  */
 export async function applyLayouts(
   document: Document,
@@ -113,7 +113,7 @@ export async function applyLayouts(
   const visited = new Set<string>();
   for (;;) {
     const head = findFirst(current, "head");
-    const link = head && findAll(head, isLayoutLink)[0];
+    const link = head && findAllOutsideInertTemplates(head, isLayoutLink)[0];
     if (!link) return current;
     const href = getAttr(link, "href");
     const line = lineOf(link);

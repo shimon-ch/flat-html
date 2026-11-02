@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { expand } from "./helpers.ts";
+import { expand, page, templates } from "./helpers.ts";
 
 const card =
   '<article><header><slot name="title">untitled</slot></header><slot>empty</slot></article>';
@@ -45,5 +45,42 @@ test("slot 属性を持つ参照は展開後の根要素が名前付き slot に
   });
   expect(html).toBe(
     '<article data-flat="card"><header><span data-flat="badge">new</span></header>empty</article>',
+  );
+});
+
+const titled = {
+  card: '<article><h2><slot name="title"></slot></h2></article>',
+  badge: '<link rel="stylesheet" href="/badge.css"><span>b</span>',
+};
+
+test("名前付き slot へ渡した参照の資産は、根要素と同じ slot に入る。資産は slot 以外の引数を受け取らない", async () => {
+  const html = await expand(
+    '<flat-card><flat-badge slot="title" id="b"></flat-badge></flat-card>',
+    titled,
+  );
+  expect(html).toBe(
+    '<article data-flat="card"><h2><link rel="stylesheet" href="/badge.css">' +
+      '<span id="b" data-flat="badge">b</span></h2></article>',
+  );
+});
+
+test("名前付き slot へ渡した参照の資産は、ページでは <head> へ集約される", async () => {
+  const result = await page(
+    "<!doctype html><html><head><title>t</title></head>" +
+      '<body><flat-card><flat-badge slot="title"></flat-badge></flat-card></body></html>',
+    { resolve: templates(titled) },
+  );
+  expect(result.html).toBe(
+    '<!DOCTYPE html><html><head><title>t</title><link rel="stylesheet" href="/badge.css"></head>' +
+      '<body><article data-flat="card"><h2><span data-flat="badge">b</span></h2></article></body></html>',
+  );
+});
+
+test("テンプレートの素の <template> の中の <slot> には差し込まない", async () => {
+  const html = await expand("<flat-x><p>c</p></flat-x>", {
+    x: '<x-card><template shadowrootmode="open"><slot></slot></template><slot></slot></x-card>',
+  });
+  expect(html).toBe(
+    '<x-card data-flat="x"><template shadowrootmode="open"><slot></slot></template><p>c</p></x-card>',
   );
 });

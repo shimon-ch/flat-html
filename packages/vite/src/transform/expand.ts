@@ -13,7 +13,7 @@ import {
   type ParentNode,
 } from "./dom.ts";
 import { Scope } from "./evaluator.ts";
-import { render } from "./render.ts";
+import { referencedNames, render } from "./render.ts";
 import { distribute, rootElements } from "./slots.ts";
 import { TemplateError, type TemplateSource, type TransformOptions } from "./types.ts";
 
@@ -58,6 +58,11 @@ export async function expandReferences(
   }
 }
 
+/**
+ * 参照タグ `el` を 1 つ展開し、置き換えるノードを返す。
+ * テンプレートの字面で式に使われない引数は、資産でない根要素へ透過する（ADR-0010 / ADR-0033）。
+ * 資産の要素（ADR-0023）は、透過する引数のうち `slot` だけを受け取り、根要素と同じ差し込み先へ入る（ADR-0033）。
+ */
 async function expandOne(
   el: Element,
   name: string,
@@ -71,13 +76,17 @@ async function expandOne(
   const fragment = parseFragment(template.source, { sourceCodeLocationInfo: true });
   if (ctx.resolveAsset) await resolveAssetUrls(fragment, template.path, ctx.resolveAsset);
   const args = Object.fromEntries(el.attrs.map((a) => [a.name, a.value]));
-  const scope = new Scope(args);
-  render(fragment, scope, template.path);
+  const used = referencedNames(fragment, template.path);
+  render(fragment, new Scope(args), template.path);
   await expandReferences(fragment, { ...ctx, path: template.path }, [...stack, name]);
   distribute(fragment, childrenOf(el));
 
-  const passthrough = el.attrs.filter((a) => !scope.used.has(a.name));
-  for (const root of rootElements(fragment).filter((r) => assetKey(r) === undefined)) {
+  const passthrough = el.attrs.filter((a) => !used.has(a.name));
+  const roots = rootElements(fragment);
+  for (const asset of roots.filter((r) => assetKey(r) !== undefined)) {
+    for (const attr of passthrough) if (attr.name === "slot") setAttr(asset, attr.name, attr.value);
+  }
+  for (const root of roots.filter((r) => assetKey(r) === undefined)) {
     for (const attr of passthrough) {
       const existing = attr.name === "class" ? getAttr(root, "class") : undefined;
       setAttr(root, attr.name, existing ? `${existing} ${attr.value}` : attr.value);

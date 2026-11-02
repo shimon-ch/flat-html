@@ -156,3 +156,96 @@ test("参照タグの属性も消え、コンポーネントからは引数が�
   );
   expect(html).toBe('<p data-flat="x">x</p>');
 });
+
+const nested = [
+  { name: "a", ok: true, tags: ["x", "y"] },
+  { name: "b", ok: false, tags: [] },
+];
+
+test("<template each> の中の <template if> も、繰り返しごとに評価される", async () => {
+  const html = await expand(
+    '<ul><template each="i of items"><template if="i.ok"><li>{{ i.name }}</li></template></template></ul>',
+    {},
+    { items: nested },
+  );
+  expect(html).toBe("<ul><li>a</li></ul>");
+});
+
+test("<template each> の中の <template each> も、繰り返しごとに評価される", async () => {
+  const html = await expand(
+    '<template each="i of items"><template each="t of i.tags"><b>{{ i.name }}{{ t }}</b></template></template>',
+    {},
+    { items: nested },
+  );
+  expect(html).toBe("<b>ax</b><b>ay</b>");
+});
+
+test("<template each> の中の素の <template> は、中身ごと複製されて不活性のまま残る", async () => {
+  const html = await expand(
+    '<template each="i of items"><template><i>{{ i.name }}</i></template></template>',
+    {},
+    { items: nested },
+  );
+  expect(html).toBe(
+    "<template><i>{{ i.name }}</i></template><template><i>{{ i.name }}</i></template>",
+  );
+});
+
+test("<script> の中の {{ }} は展開せず書かれたまま出す。<script> の属性は展開する", async () => {
+  const html = await expand(
+    '<script type="application/ld+json" id="{{ id }}">{"name":"{{ t }}"}</script>',
+    {},
+    { id: "ld", t: "</script><script>alert(1)</script>" },
+  );
+  expect(html).toBe('<script type="application/ld+json" id="ld">{"name":"{{ t }}"}</script>');
+});
+
+test("<style> の中の {{ }} は展開せず書かれたまま出す。<style> の属性は展開する", async () => {
+  const html = await expand(
+    '<style media="{{ m }}">p{color:{{ c }}}</style>',
+    {},
+    { m: "print", c: "red" },
+  );
+  expect(html).toBe('<style media="print">p{color:{{ c }}}</style>');
+});
+
+test("中身に {{ を含むインラインスクリプトは、ページでもテンプレートでも失敗しない", async () => {
+  const script = "<script>function f(){{let a=1}}</script>";
+  expect(await expand(script, {})).toBe(script);
+  expect(await expand('<flat-x a="1"></flat-x>', { x: `<div>${script}</div>` })).toBe(
+    `<div a="1" data-flat="x">${script}</div>`,
+  );
+});
+
+test("直列化でエスケープされない要素の中は展開しない。<title> と <textarea> の中は展開する", async () => {
+  for (const tag of ["style", "script", "xmp", "iframe", "noembed", "noframes", "noscript"]) {
+    expect(await expand(`<${tag}>{{ x }}</${tag}>`, {}, { x: "X" })).toBe(
+      `<${tag}>{{ x }}</${tag}>`,
+    );
+  }
+  expect(await expand("<plaintext>{{ x }}", {}, { x: "X" })).toBe("<plaintext>{{ x }}</plaintext>");
+  expect(await expand("<title>{{ x }}</title><textarea>{{ x }}</textarea>", {}, { x: "<X>" })).toBe(
+    "<title>&lt;X&gt;</title><textarea>&lt;X&gt;</textarea>",
+  );
+});
+
+test("<template if> で引数があるかは != undefined で調べる。値のない属性でも真になる", async () => {
+  const html = await expand("<flat-x open></flat-x><flat-x></flat-x>", {
+    x: '<p><template if="open != undefined">open</template></p>',
+  });
+  expect(html).toBe('<p data-flat="x">open</p><p data-flat="x"></p>');
+});
+
+test("undefined はリテラルで、同名のデータや引数があってもそれを指さない", async () => {
+  const fromData = await expand(
+    '<template if="open != undefined">open</template>',
+    {},
+    { undefined: "u" },
+  );
+  expect(fromData).toBe("");
+
+  const fromArg = await expand('<flat-x undefined="u"></flat-x>', {
+    x: "<p>{{ open == undefined }}</p>",
+  });
+  expect(fromArg).toBe('<p undefined="u" data-flat="x">true</p>');
+});

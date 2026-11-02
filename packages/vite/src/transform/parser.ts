@@ -1,8 +1,9 @@
 /**
  * 式の構文木。ADR-0012 の範囲（プロパティ参照、比較、否定、論理、リテラル）だけを表す。
+ * `true`、`false`、`null`、`undefined` はリテラルで、同名の引数があっても引数を指さない（ADR-0033）。
  */
 export type Expr =
-  | { kind: "literal"; value: string | number | boolean | null }
+  | { kind: "literal"; value: string | number | boolean | null | undefined }
   | { kind: "path"; segments: string[] }
   | { kind: "not"; operand: Expr }
   | { kind: "binary"; op: "==" | "!=" | "&&" | "||"; left: Expr; right: Expr };
@@ -144,6 +145,7 @@ class Parser {
     if (first === "true") return { kind: "literal", value: true };
     if (first === "false") return { kind: "literal", value: false };
     if (first === "null") return { kind: "literal", value: null };
+    if (first === "undefined") return { kind: "literal", value: undefined };
     const segments = [first];
     while (this.takeOp(".")) {
       const token = this.next();
@@ -181,4 +183,18 @@ class Parser {
 export function parseExpression(source: string): Expr {
   if (source.trim() === "") throw new ExpressionSyntaxError("式が空", source);
   return new Parser(tokenize(source), source).parse();
+}
+
+/** 式が参照するパスの先頭の名前を、式に現れる順に返す。重複は除かない。 */
+export function pathHeads(expr: Expr): string[] {
+  switch (expr.kind) {
+    case "literal":
+      return [];
+    case "path":
+      return expr.segments.slice(0, 1);
+    case "not":
+      return pathHeads(expr.operand);
+    case "binary":
+      return [...pathHeads(expr.left), ...pathHeads(expr.right)];
+  }
 }
