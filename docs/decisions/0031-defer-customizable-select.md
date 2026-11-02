@@ -7,7 +7,7 @@
 
 ADR-0016 は、accordion と明暗切り替えの次に、dialog、popover と invoker、customizable select を順に作ると決めた。customizable select は、`<select>` に `appearance: base-select` を当て、`<select>` の中に `<button>` と `<selectedcontent>` を置いて、選択肢の一覧と選ばれた値の見た目を作る。HTML の仕様は、そのために `<select>` の中身の解析を緩めた。
 
-flat-html は、テンプレートとページを parse5 で解析し、直列化し直して出力する（ADR-0008、ADR-0020）。parse5 は、緩めた `<select>` の解析を実装していない。2026-11-02 時点の最新の 8.1.0（2026-11-01 公開）のリリースノートにも含まれていない。古い解析は、`<select>` の中にある `<option>`、`<optgroup>`、`<hr>` 以外の開始タグを捨てる。parse5 側の実装の PR（#1317、#1610）は open のままである。
+flat-html は、テンプレートとページを parse5 で解析し、直列化し直して出力する（ADR-0008、ADR-0020）。parse5 は、緩めた `<select>` の解析を実装していない。2026-11-02 時点の最新の 8.1.0（2026-11-01 公開）のリリースノートにも含まれていない。古い解析は、`<select>` の中にある `<option>`、`<optgroup>`、`<hr>`、`<template>`、`<script>` 以外の開始タグを捨てる。捨てたタグの中の文字は残る。parse5 側の実装の PR（#1317、#1610）は open のままである。
 
 手元の parse5 8.0.1 で確かめた結果:
 
@@ -26,7 +26,7 @@ flat-html は、テンプレートとページを parse5 で解析し、直列�
 ## 決定
 
 - customizable select のコンポーネントは作らない。parse5 が緩めた `<select>` の解析を実装するまで保留する
-- 保留の間、flat-html を通るテンプレートとページでは、`<select>` の中に `<option>`、`<optgroup>`、`<hr>` 以外を書けない。これを既知の制約とし、`packages/vite/tests/known-constraints.test.ts` で今の振る舞いを固定する。parse5 を上げてこのテストが落ちたら、それが再開の合図になる
+- 保留の間、flat-html を通るテンプレートとページでは、`<select>` の中に `<option>`、`<optgroup>`、`<hr>`、`<template>`、`<script>` 以外の要素を書けない。選択肢を `<template each>` で作る書き方は、今の解析でも使える。これを既知の制約とし、`packages/vite/tests/known-constraints.test.ts` で今の振る舞いを固定する。parse5 を上げてこのテストが落ちたら、それが再開の合図になる
 - 再開するときは、customizable select の対応ブラウザも見直す
 - ADR-0016 の順序の残りは、ADR-0016 のとおり Custom Element が要るもの（tabs、combobox）へ進む。customizable select は、再開の条件がそろった時点で差し込む
 
