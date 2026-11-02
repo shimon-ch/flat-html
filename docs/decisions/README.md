@@ -36,3 +36,7 @@
 | [0029](./0029-omit-null-attributes.md) | 値全体が 1 つの `{{ }}` の属性は、結果が null か undefined なら出さない（0012 / 0023 を補う） |
 | [0030](./0030-head-whitespace.md) | `<head>` に要素を出し入れするときは、前の空白も一緒に動かす（0013 / 0019 / 0023 を補う） |
 | [0031](./0031-defer-customizable-select.md) | customizable select は、解析器が新しい `<select>` の解析に対応するまで保留する（0016 の一部を保留） |
+| [0032](./0032-head-override-position.md) | ページの `<title>` と `<meta charset>` と `<meta name="viewport">` は、レイアウトの同じ種類の要素の位置に入る（0019 / 0023 を補う） |
+| [0033](./0033-expression-scope-details.md) | 引数と式の細目（透過する引数の判定、生テキスト要素、資産の slot、`undefined`）（0010 / 0012 / 0023 を補う） |
+| [0034](./0034-asset-placement-and-resolution.md) | 資産の URL はビルドではページからの相対にし、解決できなければ例外にする。`<head>` の資産も末尾へ移すまま（0013 / 0020 / 0023 / 0024 を補う） |
+| [0035](./0035-literal-braces-and-error-paths.md) | 文字参照で書いた波括弧は `{{ }}` の区切りにしない。エラーはノードを書いたファイルと行で報告する（0012 / 0023 を補う） |
