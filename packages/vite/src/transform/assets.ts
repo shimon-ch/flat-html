@@ -1,7 +1,8 @@
 import {
   appendToHead,
   detachWithIndent,
-  findAll,
+  findAllOutsideInertTemplates,
+  findAllOutsideTemplates,
   findFirst,
   getAttr,
   headIndent,
@@ -61,13 +62,14 @@ function isFileSpecifier(url: string): boolean {
  * `root` の中の資産要素の URL を、`fromPath` の位置を基準に解決した URL へ書き換える。
  * 集約より前に呼ぶ。重複除去の鍵が解決後の URL になり、別々のテンプレートが同じ資産を指しても 1 つにまとまる。
  * 解決は式の評価より前に行うので、URL に `{{ }}` は使えない。
+ * 素の `<template>` の中身は不活性なので解決しない（ADR-0023）。`<template if/each/html>` の中身は解決する。
  */
 export async function resolveAssetUrls(
   root: ParentNode,
   fromPath: string,
   resolveAsset: NonNullable<TransformOptions["resolveAsset"]>,
 ): Promise<void> {
-  for (const el of findAll(root, (e) => assetRef(e) !== undefined)) {
+  for (const el of findAllOutsideInertTemplates(root, (e) => assetRef(e) !== undefined)) {
     const ref = assetRef(el)!;
     if (!isFileSpecifier(ref.url)) continue;
     const resolved = await resolveAsset(ref.url, fromPath);
@@ -79,6 +81,7 @@ export async function resolveAssetUrls(
  * 文書中の資産（`<link rel="stylesheet|modulepreload|preload">` と `src` 付き `<script type="module">`）を
  * 文書順のまま `<head>` の末尾へ移し、同じ種類と URL のものは最初の 1 つだけ残す。`<head>` がなければ何もしない。
  * `<head>` の中の空白は要素と一緒に動かし、`<body>` の空白には触らない（ADR-0030）。
+ * `<template>` の中身は探さない。式の評価の後に呼ぶので、残る `<template>` はブラウザにとって不活性なものだけである。
  */
 export function aggregate(document: Document): void {
   const head = findFirst(document, "head");
@@ -86,7 +89,7 @@ export function aggregate(document: Document): void {
   // 字下げは、移動で `<head>` の先頭の要素が動く前に求める
   const indent = headIndent(head);
   const seen = new Set<string>();
-  for (const el of findAll(document, (e) => assetKey(e) !== undefined)) {
+  for (const el of findAllOutsideTemplates(document, (e) => assetKey(e) !== undefined)) {
     const key = assetKey(el)!;
     if (seen.has(key)) {
       detachWithIndent(el);

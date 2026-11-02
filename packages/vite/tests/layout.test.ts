@@ -104,9 +104,9 @@ test("整形されたページとレイアウトの合流では、<head> の要�
   expect(headOf(result.html)).toBe(
     lines(
       "<head>",
-      '    <meta name="color-scheme" content="light dark">',
       '    <meta charset="utf-8">',
       '    <meta name="viewport" content="width=device-width, initial-scale=1">',
+      '    <meta name="color-scheme" content="light dark">',
       "    <title>Page</title>",
       '    <meta name="description" content="d">',
       '    <link rel="stylesheet" href="/site.css">',
@@ -145,7 +145,7 @@ test("ページ側 <head> のコメントは字下げ付きで移る", async () 
   );
 });
 
-test("レイアウトの <head> の要素が重複除去で全部消えても、ページ側の要素はレイアウトの字下げで並ぶ", async () => {
+test("ページ側の要素は、ページの字下げでなくレイアウトの字下げで並ぶ", async () => {
   const layout = lines(
     "<!doctype html>",
     "<html>",
@@ -225,6 +225,145 @@ test("多段のレイアウトでも、<head> の要素は外側のレイアウ�
       "  </head>",
     ),
   );
+});
+
+test("ページの <meta charset> は、レイアウトの先頭にある <meta charset> の位置を引き継ぐ", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      '    <link rel="layout" href="base.html" />',
+      '    <meta name="description" content="d" />',
+      '    <meta charset="UTF-8" />',
+      "  </head>",
+      "  <body></body>",
+      "</html>",
+    ),
+    {
+      resolveLayout: layouts({
+        "base.html": lines(
+          "<!doctype html>",
+          "<html>",
+          "  <head>",
+          '    <meta charset="utf-8" />',
+          '    <meta name="color-scheme" content="light dark" />',
+          "    <title>Base</title>",
+          "  </head>",
+          "  <body><slot></slot></body>",
+          "</html>",
+        ),
+      }),
+    },
+  );
+  expect(headOf(result.html)).toBe(
+    lines(
+      "<head>",
+      '    <meta charset="UTF-8">',
+      '    <meta name="color-scheme" content="light dark">',
+      "    <title>Base</title>",
+      '    <meta name="description" content="d">',
+      "  </head>",
+    ),
+  );
+});
+
+test("ページの <title> は、レイアウトの <title> の位置を引き継ぐ", async () => {
+  const result = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"><title>Page</title></head><body></body></html>',
+    {
+      resolveLayout: layouts({
+        "base.html":
+          '<!doctype html><html><head><meta charset="utf-8"><title>Base</title>' +
+          '<meta name="color-scheme" content="light dark"></head><body><slot></slot></body></html>',
+      }),
+    },
+  );
+  expect(headOf(result.html)).toBe(
+    '<head><meta charset="utf-8"><title>Page</title><meta name="color-scheme" content="light dark"></head>',
+  );
+});
+
+test("レイアウトに同じ種類の要素がなければ、ページの要素は <head> の末尾に入る", async () => {
+  const result = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html">' +
+      '<meta name="viewport" content="width=device-width"></head><body></body></html>',
+    {
+      resolveLayout: layouts({
+        "base.html":
+          '<!doctype html><html><head><meta charset="utf-8"><title>Base</title></head>' +
+          "<body><slot></slot></body></html>",
+      }),
+    },
+  );
+  expect(headOf(result.html)).toBe(
+    '<head><meta charset="utf-8"><title>Base</title><meta name="viewport" content="width=device-width"></head>',
+  );
+});
+
+test("素の <template> の中の <title> は重複除去の候補にせず、本物の <title> を残す", async () => {
+  const fromPage = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html">' +
+      "<template><title>T</title></template></head><body></body></html>",
+    {
+      resolveLayout: layouts({
+        "base.html":
+          "<!doctype html><html><head><title>Base</title></head><body><slot></slot></body></html>",
+      }),
+    },
+  );
+  expect(headOf(fromPage.html)).toBe(
+    "<head><title>Base</title><template><title>T</title></template></head>",
+  );
+
+  const fromLayout = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"><title>Page</title></head><body></body></html>',
+    {
+      resolveLayout: layouts({
+        "base.html":
+          "<!doctype html><html><head><template><title>T</title></template><title>Base</title></head>" +
+          "<body><slot></slot></body></html>",
+      }),
+    },
+  );
+  expect(headOf(fromLayout.html)).toBe(
+    "<head><template><title>T</title></template><title>Page</title></head>",
+  );
+});
+
+/** ページの `<title>P</title>` を、`<head>` の中身が `layoutHead` のレイアウトへ合流させ、出力の `<head>` を返す。 */
+async function mergeTitleInto(layoutHead: string, data: Record<string, unknown>): Promise<string> {
+  const result = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"><title>P</title></head><body></body></html>',
+    {
+      data,
+      resolveLayout: layouts({
+        "base.html": `<!doctype html><html><head>${layoutHead}</head><body><slot></slot></body></html>`,
+      }),
+    },
+  );
+  return headOf(result.html);
+}
+
+const colorScheme = '<meta name="color-scheme" content="light dark">';
+
+test("レイアウトの <template if> の中の <title> も重複除去の候補に数え、ページの <title> だけを残す", async () => {
+  for (const x of [true, false]) {
+    expect(
+      await mergeTitleInto(
+        `<template if="x"><title>A</title></template><title>B</title>${colorScheme}`,
+        { x },
+      ),
+    ).toBe(`<head><title>P</title>${colorScheme}</head>`);
+  }
+});
+
+test("レイアウトの <head> の直下に同じ種類がなければ、ページの要素は <template if> の中へ入れず末尾へ入れる", async () => {
+  for (const x of [true, false]) {
+    expect(
+      await mergeTitleInto(`<template if="x"><title>A</title></template>${colorScheme}`, { x }),
+    ).toBe(`<head>${colorScheme}<title>P</title></head>`);
+  }
 });
 
 test("詰めて書かれた <head> の合流では空白を足さない", async () => {

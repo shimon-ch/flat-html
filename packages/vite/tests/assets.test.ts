@@ -202,3 +202,117 @@ test("詰めて書かれた <head> への集約では空白を足さない", asy
       '<body><p>x</p><div data-flat="a">a</div></body></html>',
   );
 });
+
+test("レイアウトの <head> の子が集約する資産だけで、それが末尾へ移っても、字下げは保たれる", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      '    <link rel="layout" href="base.html" />',
+      "  </head>",
+      "  <body>",
+      "    <flat-a></flat-a>",
+      "  </body>",
+      "</html>",
+    ),
+    {
+      resolveLayout: layouts({
+        "base.html": lines(
+          "<!doctype html>",
+          "<html>",
+          "  <head>",
+          '    <link rel="stylesheet" href="/site.css" />',
+          "  </head>",
+          "  <body><slot></slot></body>",
+          "</html>",
+        ),
+      }),
+      resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }),
+    },
+  );
+  expect(headOf(result.html)).toBe(
+    lines(
+      "<head>",
+      '    <link rel="stylesheet" href="/site.css">',
+      '    <link rel="stylesheet" href="/a.css">',
+      "  </head>",
+    ),
+  );
+});
+
+test("1 行で書いた <head> への集約では改行を足さない", async () => {
+  const result = await page(
+    "<!doctype html><html><head> <title>t</title></head><body><flat-a></flat-a></body></html>",
+    { resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }) },
+  );
+  expect(headOf(result.html)).toBe(
+    '<head> <title>t</title><link rel="stylesheet" href="/a.css"></head>',
+  );
+});
+
+test("<head> がコメントで始まっても、集約した資産は <head> の字下げで入る", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      '    <!-- c --><meta charset="utf-8">',
+      "    <title>t</title>",
+      "  </head>",
+      "  <body>",
+      "    <flat-a></flat-a>",
+      "  </body>",
+      "</html>",
+    ),
+    { resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }) },
+  );
+  expect(headOf(result.html)).toBe(
+    lines(
+      "<head>",
+      '    <!-- c --><meta charset="utf-8">',
+      "    <title>t</title>",
+      '    <link rel="stylesheet" href="/a.css">',
+      "  </head>",
+    ),
+  );
+});
+
+test("<head> の素の <template> の中の資産は集約しない", async () => {
+  const html = doc(
+    '<title>t</title><template><link rel="stylesheet" href="/t.css"></template>',
+    "<p>x</p>",
+  );
+  const result = await page(html);
+  expect(squash(result.html)).toBe(squash(html));
+});
+
+test("<template shadowrootmode> の中の資産は集約せず、影の木に残す", async () => {
+  const html = doc(
+    "<title>t</title>",
+    '<x-card><template shadowrootmode="open"><link rel="stylesheet" href="/card.css"><p>c</p></template></x-card>',
+  );
+  const result = await page(html);
+  expect(squash(result.html)).toBe(squash(html));
+});
+
+test("テンプレートの素の <template> の中の資産は URL を解決しない。<template if> の中は解決する", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const result = await page(doc("<title>t</title>", '<flat-a on="yes"></flat-a>'), {
+    resolve: templates({
+      a:
+        '<div><template><link rel="stylesheet" href="./inert.css"></template>' +
+        '<template if="on"><link rel="stylesheet" href="./on.css"></template></div>',
+    }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([{ specifier: "./on.css", fromPath: "templates/a.html" }]);
+  expect(squash(result.html)).toBe(
+    squash(
+      doc(
+        '<title>t</title><link rel="stylesheet" href="/fs/templates/on.css">',
+        '<div data-flat="a"><template><link rel="stylesheet" href="./inert.css"></template></div>',
+      ),
+    ),
+  );
+});

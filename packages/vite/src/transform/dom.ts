@@ -13,6 +13,10 @@ export const isText = (node: Node): node is T.TextNode => defaultTreeAdapter.isT
 export const isTemplate = (node: Node): node is T.Template =>
   isElement(node) && node.tagName === "template" && "content" in node;
 
+/** if / each / html のいずれも持たない素の `<template>`。中身は不活性として扱う（ADR-0023）。 */
+export const isInertTemplate = (node: Node): node is T.Template =>
+  isTemplate(node) && !["if", "each", "html"].some((name) => getAttr(node, name) !== undefined);
+
 /** 要素から属性値を取る。なければ `undefined`。 */
 export function getAttr(el: Element, name: string): string | undefined {
   return el.attrs.find((a) => a.name === name)?.value;
@@ -94,14 +98,45 @@ export function walk(root: ParentNode, visit: (el: Element) => boolean | undefin
   }
 }
 
-/** 条件に合う要素を文書順に集める。 */
-export function findAll(root: ParentNode, match: (el: Element) => boolean): Element[] {
+/**
+ * 条件に合う要素を文書順に集める。`skip` が真を返す要素は、それ自体は `match` で判定するが、
+ * 子孫と（`<template>` なら）中身には入らない。
+ */
+function collect(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+  skip: (el: Element) => boolean,
+): Element[] {
   const found: Element[] = [];
   walk(root, (el) => {
     if (match(el)) found.push(el);
-    return undefined;
+    return skip(el) ? false : undefined;
   });
   return found;
+}
+
+/** 条件に合う要素を文書順に集める。`<template>` の中身にも入る。 */
+export function findAll(root: ParentNode, match: (el: Element) => boolean): Element[] {
+  return collect(root, match, () => false);
+}
+
+/** 条件に合う要素を文書順に集める。どの `<template>` の中身にも入らない。 */
+export function findAllOutsideTemplates(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+): Element[] {
+  return collect(root, match, isTemplate);
+}
+
+/**
+ * 条件に合う要素を文書順に集める。素の `<template>`（`isInertTemplate`）の中身には入らず、
+ * `<template if/each/html>` の中身には入る。式の評価より前の木を探すときに使う。
+ */
+export function findAllOutsideInertTemplates(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+): Element[] {
+  return collect(root, match, isInertTemplate);
 }
 
 export function findFirst(root: ParentNode, tagName: string): Element | undefined {
@@ -126,14 +161,14 @@ function previousSibling(node: ChildNode): ChildNode | undefined {
 }
 
 /**
- * `<head>` の字下げ。最初の子要素の直前にある空白だけのテキストの、最後の改行より後ろを返す。
- * そのテキストがなければ（詰めて書かれた `<head>` など）`undefined`。
+ * `<head>` の字下げ（ADR-0030）。`<head>` の最初の子ノードが空白だけのテキストで改行を含むなら、
+ * 最後の改行より後ろを返す。それ以外（詰めて書かれた `<head>`、1 行で書かれた `<head>` など）は `undefined`。
  */
 export function headIndent(head: Element): string | undefined {
-  const first = head.childNodes.find(isElement);
-  const before = first && previousSibling(first);
-  if (before === undefined || !isText(before) || !isBlankText(before)) return undefined;
-  return before.value.slice(before.value.lastIndexOf("\n") + 1);
+  const first = head.childNodes[0];
+  if (first === undefined || !isText(first) || !isBlankText(first)) return undefined;
+  const newline = first.value.lastIndexOf("\n");
+  return newline === -1 ? undefined : first.value.slice(newline + 1);
 }
 
 /**

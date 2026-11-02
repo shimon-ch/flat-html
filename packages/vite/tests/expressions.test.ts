@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import { TemplateError } from "../src/index.ts";
-import { expand } from "./helpers.ts";
+import { expand, headOf, lines, page } from "./helpers.ts";
 
 test("{{ }} はテキストと属性値で使え、常に HTML エスケープされる", async () => {
   const html = await expand('<p title="{{ t }}">{{ t }}</p>', {}, { t: '<b>"&' });
@@ -42,6 +42,24 @@ test("<template each> は item を導入して繰り返す", async () => {
 test("<template html> は生の HTML を差し込む", async () => {
   const html = await expand('<div><template html="raw"></template></div>', {}, { raw: "<b>r</b>" });
   expect(html).toBe("<div><b>r</b></div>");
+});
+
+test("<head> の <template if> が偽、<template each> が空で消えるとき、空行を残さない", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      "    <title>t</title>",
+      '    <template if="dev"><script type="module" src="/dev.js"></script></template>',
+      '    <template each="s of scripts"><script type="module" src="{{ s }}"></script></template>',
+      "  </head>",
+      "  <body></body>",
+      "</html>",
+    ),
+    { data: { dev: false, scripts: [] } },
+  );
+  expect(headOf(result.html)).toBe(lines("<head>", "    <title>t</title>", "  </head>"));
 });
 
 test("関数呼び出し・算術・代入は構文エラーとしてパスと行つきで失敗する", async () => {

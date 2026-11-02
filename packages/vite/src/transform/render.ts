@@ -3,9 +3,10 @@ import {
   append,
   childrenOf,
   cloneNode,
-  detach,
+  detachWithIndent,
   getAttr,
   isElement,
+  isInertTemplate,
   isTemplate,
   isText,
   lineOf,
@@ -97,30 +98,34 @@ export function render(root: ParentNode, scope: Scope, path: string | undefined)
 }
 
 function renderElement(el: Element, scope: Scope, path: string | undefined): void {
-  if (isTemplate(el) && (hasAttr(el, "if") || hasAttr(el, "each") || hasAttr(el, "html"))) {
+  if (isTemplate(el) && !isInertTemplate(el)) {
     renderDirective(el, scope, path);
     return;
   }
-  el.attrs = el.attrs.flatMap((attr) => {
-    const value = renderAttribute(attr.value, scope, el, path);
-    return value === undefined ? [] : [{ ...attr, value }];
-  });
+  if (el.attrs.some((attr) => attr.value.includes("{{"))) {
+    el.attrs = el.attrs.flatMap((attr) => {
+      const value = renderAttribute(attr.value, scope, el, path);
+      return value === undefined ? [] : [{ ...attr, value }];
+    });
+  }
   if (!isTemplate(el)) render(el, scope, path);
 }
 
-function hasAttr(el: Element, name: string): boolean {
-  return getAttr(el, name) !== undefined;
-}
-
+/**
+ * `<template if/each/html>` を評価して置き換える。
+ * 何も残らない経路（if が偽、each の結果が空）は `detachWithIndent` で外し、`<head>` に空行を残さない（ADR-0030）。
+ */
 function renderDirective(el: Template, scope: Scope, path: string | undefined): void {
   const condition = getAttr(el, "if");
   if (condition !== undefined && !evalIn(condition, scope, el, path)) {
-    detach(el);
+    detachWithIndent(el);
     return;
   }
   const each = getAttr(el, "each");
   if (each !== undefined) {
-    replaceWith(el, renderEach(el, each, scope, path));
+    const nodes = renderEach(el, each, scope, path);
+    if (nodes.length === 0) detachWithIndent(el);
+    else replaceWith(el, nodes);
     return;
   }
   const html = getAttr(el, "html");
