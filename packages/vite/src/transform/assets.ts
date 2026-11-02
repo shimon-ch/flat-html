@@ -42,10 +42,11 @@ function assetRef(el: Element): AssetRef | undefined {
 /**
  * 集約の対象なら、種類と URL を組にした鍵を返す（ADR-0013）。
  * 同じ URL でも `<link rel="modulepreload">` と `<script type="module">` は別物なので、種類を鍵に含める。
+ * URL は文字参照の波括弧の印（ADR-0035）を戻してから比べる。印の有無にかかわらず、同じ URL は同じ鍵になる。
  */
 export function assetKey(el: Element): string | undefined {
   const ref = assetRef(el);
-  return ref === undefined ? undefined : `${ref.kind}:${ref.url}`;
+  return ref === undefined ? undefined : `${ref.kind}:${unmarkBraces(ref.url)}`;
 }
 
 /** スキームを持つ URL（`https:`、`data:` など）。 */
@@ -105,6 +106,16 @@ function attachSuffix(resolved: string, suffix: string): string {
 }
 
 /** `JSON.stringify` で表せれば、その文字列。表せなければ（`undefined`、関数、循環する値など）`undefined`。 */
+/** 文字列の `message` を持つ値なら、その `message` を返す。`instanceof Error` に頼らず、別の realm の `Error` も拾う。 */
+function messageOf(value: unknown): string | undefined {
+  return typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof value.message === "string"
+    ? value.message
+    : undefined;
+}
+
 function toJson(value: unknown): string | undefined {
   try {
     return JSON.stringify(value);
@@ -116,7 +127,8 @@ function toJson(value: unknown): string | undefined {
 /**
  * `resolveAsset` が投げた値 `error` を、資産を書いたファイル `fromPath` と要素 `el` の行の `TemplateError` にする。
  * `error` が `TemplateError` なら、パスと行を重ねないよう、そのまま返す。
- * それ以外は理由を添える。`Error` なら `message`、それ以外は JSON で表せれば JSON、表せなければ `String` の結果を理由にする。
+ * それ以外は理由を添える。文字列の `message` を持つ値（別の realm の `Error` を含む）なら `message`、
+ * それ以外は JSON で表せれば JSON、表せなければ `String` の結果を理由にする。
  */
 function resolutionError(
   error: unknown,
@@ -125,7 +137,7 @@ function resolutionError(
   el: Element,
 ): TemplateError {
   if (error instanceof TemplateError) return error;
-  const reason = error instanceof Error ? error.message : (toJson(error) ?? String(error));
+  const reason = messageOf(error) ?? toJson(error) ?? String(error);
   return new TemplateError(`資産 ${specifier} を解決できない: ${reason}`, fromPath, lineOf(el));
 }
 

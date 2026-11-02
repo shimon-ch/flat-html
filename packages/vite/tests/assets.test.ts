@@ -450,14 +450,26 @@ test("{{ }} を含む資産の URL は解決せず、式の評価の後の URL �
   );
 });
 
-test("資産の指定子に文字参照で書いた波括弧は、{ と } として解決に渡る。{{ も }} も含まない解決した URL では { と } のまま出る", async () => {
+test("資産の指定子に文字参照で書いた波括弧は、{ と } として解決に渡り、解決した URL では文字参照で出る", async () => {
   const { calls, resolveAsset } = assetResolver();
   const result = await page(doc("<title>t</title>", "<flat-a></flat-a>"), {
     resolve: templates({ a: '<link rel="stylesheet" href="./&#123;a&#125;.css"><div>a</div>' }),
     resolveAsset,
   });
   expect(calls).toEqual([{ specifier: "./{a}.css", fromPath: "templates/a.html" }]);
-  expect(result.html).toContain('<link rel="stylesheet" href="/fs/templates/{a}.css">');
+  expect(result.html).toContain('<link rel="stylesheet" href="/fs/templates/&#123;a&#125;.css">');
+});
+
+test("ページに文字参照で書いた /&#123;a&#125;.css と、テンプレートの資産を解決した /{a}.css は、同じ URL として 1 つにまとまる", async () => {
+  const result = await page(
+    doc('<title>t</title><link rel="stylesheet" href="/&#123;a&#125;.css">', "<flat-a></flat-a>"),
+    {
+      resolve: templates({ a: '<link rel="stylesheet" href="./&#123;a&#125;.css"><div>a</div>' }),
+      resolveAsset: () => Promise.resolve("/{a}.css"),
+    },
+  );
+  expect(result.html.match(/<link /g)).toHaveLength(1);
+  expect(result.html).toContain('<link rel="stylesheet" href="/&#123;a&#125;.css">');
 });
 
 test("ページに書いた /a{b}.css と、テンプレートの ./a{b}.css を解決した /a{b}.css は、同じ URL として 1 つにまとまる", async () => {
@@ -567,6 +579,7 @@ test("resolveAsset が投げた例外は、その文言を理由として添え�
 test("resolveAsset が Error でない値を投げたら、JSON で表せればその JSON を、表せなければ String の結果を理由にする", async () => {
   const cases: Array<[thrown: unknown, reason: string]> = [
     [{ code: 1 }, '{"code":1}'],
+    [{ name: "Error", message: "別の realm の Error" }, "別の realm の Error"],
     [undefined, "undefined"],
   ];
   for (const [thrown, reason] of cases) {

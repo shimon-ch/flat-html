@@ -125,11 +125,10 @@ export function unmarkBraces(value: string): string {
 }
 
 /**
- * `value` が `{{` か `}}` を含めば、`{` と `}` をすべて `OPEN` と `CLOSE` にする（`unmarkBraces` の逆）。含まなければそのまま返す。
+ * `{` と `}` をすべて `OPEN` と `CLOSE` にする（`unmarkBraces` の逆）。
  * 値として使った文字列から作った値（解決した資産の URL）を木へ書き戻すときに通し、`{{ }}` の区切りとみなさせない（ADR-0035）。
- * `{{` も `}}` も含まない値の波括弧は区切りにならないので書き換えず、書かれた `{` と `}` と同じ文字列に保つ。
+ * 印の有無で同じ URL が別の文字列になるので、URL を比べる側（重複除去の鍵）は `unmarkBraces` してから比べる。
  */
 export function markValueBraces(value: string): string {
-  if (!value.includes("{{") && !value.includes("}}")) return value;
   return value.replaceAll("{", OPEN).replaceAll("}", CLOSE);
 }

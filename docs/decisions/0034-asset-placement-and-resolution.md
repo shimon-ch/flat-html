@@ -27,7 +27,7 @@ ADR-0013 の集約は、文書中のすべての資産を `<head>` の末尾へ�
 
 - テンプレートとレイアウトに書かれた資産のファイルが Vite の root の中にあれば、開発サーバーでもビルドでも、URL を `/` と root からの相対パスにする。区切りは `/` とする
 - root の外にあれば、ビルド（Vite の `command` が `"build"`）では、ページのファイルのディレクトリからの相対パスにする。区切りは `/` とし、`./` か `../` で始める
-- ページのファイルは `transformIndexHtml` の `ctx.filename` とする。`ctx.filename` が `.html` で終わらないとき（開発サーバーの `server.transformIndexHtml('/', html)` など）は、ディレクトリとみなし、その中の `index.html` をページのファイルとする。プラグインは、`transform` に渡すページのパス、ページの `<link rel="layout">` の相対パスの基準、資産の URL のすべてに、このページのファイルを使う
+- ページのファイルは `transformIndexHtml` の `ctx.filename` とする。`ctx.filename` の末尾が `/` か、Vite の root そのもののとき（開発サーバーの `server.transformIndexHtml('/', html)` など）は、ディレクトリとみなし、その中の `index.html` をページのファイルとする。それ以外（`/about` から作られた `<root>/about` など）はそのままページのファイルとし、その親を相対パスの基準にする。Vite の `getHtmlDirnameForRelativeUrl` が相対 URL の基準をディレクトリとみなす条件（末尾の `/`）と揃える。プラグインは、`transform` に渡すページのパス、ページの `<link rel="layout">` の相対パスの基準、資産の URL のすべてに、このページのファイルを使う
 - root の外にあり、開発サーバーのときは `/@fs/<絶対パス>` にする
 - ビルドでページからの相対パスにできないとき（Windows でページと資産のドライブが違い、`path.relative` が絶対パスを返すとき）も、`/@fs/<絶対パス>` にする
 - flat-html は URL に `base` を付けない
@@ -82,7 +82,7 @@ Vite のビルドが HTML を処理するのは `vite:build-html` プラグイ�
 
 ビルドでは、`ctx.filename` は Vite が読み込んだ HTML のファイルそのもので、`urlToBuiltUrl` と `this.resolve` も相対パスをそのファイルの位置から解決する。ページからの相対パスがずれることはない。
 
-### `ctx.filename` がディレクトリなら、その中の `index.html` をページとみなす
+### `ctx.filename` がディレクトリ（末尾が `/` か root）なら、その中の `index.html` をページとみなす
 
 開発サーバーの `getHtmlFilename` は、要求の URL のパスから `?` と `#` を除き、`/@fs/` で始まらなければ root に繋ぐ。`/` なら root のディレクトリそのもの、`/pages/x/` なら末尾に `/` の付いたそのディレクトリになる。`ctx.filename` をそのままページのパスにすると、`path.dirname` が 1 つ上のディレクトリを返し、ページの隣の `./layouts/base.html` を root の 1 つ上から探して見つけられない。ディレクトリの URL に対してブラウザと開発サーバーが返すのは、そのディレクトリの `index.html` なので、それをページのファイルとみなす。
 

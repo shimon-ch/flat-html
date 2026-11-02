@@ -52,12 +52,16 @@ function assetUrl(file: string, page: string, config: ResolvedConfig): string {
 
 /**
  * `transformIndexHtml` の `ctx.filename` から、ページのファイルのパスを求める（ADR-0034）。
- * `.html` で終わればそのまま返す。終わらなければディレクトリとみなし、その中の `index.html` を返す。
- * 開発サーバーの Vite は `ctx.filename` を要求の URL のパスを root に繋いで作るので、
- * `server.transformIndexHtml('/', html)` では root のディレクトリ、末尾が `/` の URL ではそのディレクトリになる。
+ * 末尾が `/` か、Vite の root そのものならディレクトリとみなし、その中の `index.html` を返す。それ以外はそのまま返す。
+ * Vite が相対 URL の基準をディレクトリとみなす条件（`getHtmlDirnameForRelativeUrl` の末尾 `/`）と揃える。
+ * `server.transformIndexHtml('/', html)` では root、`'/pages/x/'` では末尾が `/` のパス、`'/about'` では `<root>/about` が渡る。
  */
-function pageFileOf(filename: string): string {
-  return filename.endsWith(".html") ? filename : path.join(filename, "index.html");
+function pageFileOf(filename: string, root: string): string {
+  const isDirectory =
+    filename.endsWith("/") ||
+    filename.endsWith(path.sep) ||
+    path.resolve(filename) === path.resolve(root);
+  return isDirectory ? path.join(filename, "index.html") : filename;
 }
 
 /** 解決一覧を 1 行ずつの文字列にする。パスは Vite の root からの相対で出す。 */
@@ -98,7 +102,7 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
       order: "pre",
       async handler(html, ctx) {
         const roots = options.roots.map((r) => path.resolve(config.root, r));
-        const page = pageFileOf(ctx.filename);
+        const page = pageFileOf(ctx.filename, config.root);
         const result = await transform(html, {
           path: page,
           data: options.data,
