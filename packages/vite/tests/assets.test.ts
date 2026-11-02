@@ -279,6 +279,27 @@ test("<head> がコメントで始まっても、集約した資産は <head> �
   );
 });
 
+test("<head> の唯一の子の <template if> が偽で消えても、集約した資産は <head> の字下げで入る", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      '    <template if="x"><title>t</title></template>',
+      "  </head>",
+      "  <body><flat-a></flat-a></body>",
+      "</html>",
+    ),
+    {
+      data: { x: false },
+      resolve: templates({ a: '<link rel="stylesheet" href="/a.css"><div>a</div>' }),
+    },
+  );
+  expect(headOf(result.html)).toBe(
+    lines("<head>", '    <link rel="stylesheet" href="/a.css">', "  </head>"),
+  );
+});
+
 test("<head> の素の <template> の中の資産は集約しない", async () => {
   const html = doc(
     '<title>t</title><template><link rel="stylesheet" href="/t.css"></template>',
@@ -297,7 +318,7 @@ test("<template shadowrootmode> の中の資産は集約せず、影の木に残
   expect(squash(result.html)).toBe(squash(html));
 });
 
-test("テンプレートの素の <template> の中の資産は URL を解決しない。<template if> の中は解決する", async () => {
+test("テンプレートの素の <template> の中の資産も <template if> の中の資産も、テンプレートの位置から URL を解決する", async () => {
   const { calls, resolveAsset } = assetResolver();
   const result = await page(doc("<title>t</title>", '<flat-a on="yes"></flat-a>'), {
     resolve: templates({
@@ -307,12 +328,37 @@ test("テンプレートの素の <template> の中の資産は URL を解決し
     }),
     resolveAsset,
   });
-  expect(calls).toEqual([{ specifier: "./on.css", fromPath: "templates/a.html" }]);
+  expect(calls).toEqual([
+    { specifier: "./inert.css", fromPath: "templates/a.html" },
+    { specifier: "./on.css", fromPath: "templates/a.html" },
+  ]);
   expect(squash(result.html)).toBe(
     squash(
       doc(
         '<title>t</title><link rel="stylesheet" href="/fs/templates/on.css">',
-        '<div data-flat="a"><template><link rel="stylesheet" href="./inert.css"></template></div>',
+        '<div data-flat="a"><template><link rel="stylesheet" href="/fs/templates/inert.css"></template></div>',
+      ),
+    ),
+  );
+});
+
+test("テンプレートの <template shadowrootmode> の中の資産は、テンプレートの位置から URL を解決し、集約せずに影の木に残す", async () => {
+  const { calls, resolveAsset } = assetResolver();
+  const result = await page(doc("<title>t</title>", "<flat-card></flat-card>"), {
+    resolve: templates({
+      card:
+        '<x-card><template shadowrootmode="open"><link rel="stylesheet" href="./card.css">' +
+        "<slot></slot></template></x-card>",
+    }),
+    resolveAsset,
+  });
+  expect(calls).toEqual([{ specifier: "./card.css", fromPath: "templates/card.html" }]);
+  expect(squash(result.html)).toBe(
+    squash(
+      doc(
+        "<title>t</title>",
+        '<x-card data-flat="card"><template shadowrootmode="open">' +
+          '<link rel="stylesheet" href="/fs/templates/card.css"><slot></slot></template></x-card>',
       ),
     ),
   );
@@ -372,6 +418,34 @@ test("/ で始まる URL とスキーム付きの URL は解決を問わない�
           '<link rel="stylesheet" href="https://example.com/x.css">',
         '<div data-flat="a">a</div>',
       ),
+    ),
+  );
+});
+
+test("{{ }} を含む資産の URL は解決せず、式の評価の後の URL のまま残る", async () => {
+  const fromLayout = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"></head><body><p>x</p></body></html>',
+    {
+      data: { base: "/flat-html/" },
+      resolveLayout: layouts({
+        "base.html":
+          '<!doctype html><html><head><link rel="stylesheet" href="{{ base }}theme.css"></head>' +
+          "<body><slot></slot></body></html>",
+      }),
+      resolveAsset: unresolvable,
+    },
+  );
+  expect(headOf(fromLayout.html)).toBe(
+    '<head><link rel="stylesheet" href="/flat-html/theme.css"></head>',
+  );
+
+  const fromTemplate = await page(doc("<title>t</title>", '<flat-x theme="/dark.css"></flat-x>'), {
+    resolve: templates({ x: '<link rel="stylesheet" href="{{ theme }}"><div>x</div>' }),
+    resolveAsset: unresolvable,
+  });
+  expect(squash(fromTemplate.html)).toBe(
+    squash(
+      doc('<title>t</title><link rel="stylesheet" href="/dark.css">', '<div data-flat="x">x</div>'),
     ),
   );
 });

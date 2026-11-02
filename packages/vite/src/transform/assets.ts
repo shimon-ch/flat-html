@@ -1,11 +1,10 @@
 import {
   appendToHead,
   detachWithIndent,
+  findAll,
   findAllOutsideInertTemplates,
-  findAllOutsideTemplates,
   findFirst,
   getAttr,
-  headIndent,
   lineOf,
   setAttr,
   type Document,
@@ -55,16 +54,17 @@ const SCHEME = /^[a-z][a-z\d+\-.]*:/i;
 /**
  * 書かれた URL が、ファイルの位置を基準に解決する対象か。
  * `/` で始まる URL、スキームを持つ URL、空の URL は対象外で、書かれたまま Vite に渡る。
+ * `{{` を含む URL も対象外で、式の評価の後の値のまま Vite に渡る（ADR-0034）。
  */
 function isFileSpecifier(url: string): boolean {
-  return url !== "" && !url.startsWith("/") && !SCHEME.test(url);
+  return url !== "" && !url.startsWith("/") && !SCHEME.test(url) && !url.includes("{{");
 }
 
 /**
  * `root` の中の資産要素の URL を、`fromPath` の位置を基準に解決した URL へ書き換える。
  * 集約より前に呼ぶ。重複除去の鍵が解決後の URL になり、別々のテンプレートが同じ資産を指しても 1 つにまとまる。
- * 解決は式の評価より前に行うので、URL に `{{ }}` は使えない。
- * 素の `<template>` の中身は不活性なので解決しない（ADR-0023）。`<template if/each/html>` の中身は解決する。
+ * 解決は式の評価より前に行う。`{{` を含む URL は解決しない（`isFileSpecifier`）。
+ * 素の `<template>`（`<template shadowrootmode>` を含む）の中身も、`<template if/each/html>` の中身も解決する（ADR-0024）。
  * `resolveAsset` が null を返したら、`fromPath` とその要素の行を添えて `TemplateError` を投げる（ADR-0034）。
  */
 export async function resolveAssetUrls(
@@ -72,7 +72,7 @@ export async function resolveAssetUrls(
   fromPath: string,
   resolveAsset: NonNullable<TransformOptions["resolveAsset"]>,
 ): Promise<void> {
-  for (const el of findAllOutsideInertTemplates(root, (e) => assetRef(e) !== undefined)) {
+  for (const el of findAll(root, (e) => assetRef(e) !== undefined)) {
     const ref = assetRef(el)!;
     if (!isFileSpecifier(ref.url)) continue;
     const specifier = unmarkBraces(ref.url);
@@ -88,15 +88,14 @@ export async function resolveAssetUrls(
  * 文書中の資産（`<link rel="stylesheet|modulepreload|preload">` と `src` 付き `<script type="module">`）を
  * 文書順のまま `<head>` の末尾へ移し、同じ種類と URL のものは最初の 1 つだけ残す。`<head>` がなければ何もしない。
  * `<head>` の中の空白は要素と一緒に動かし、`<body>` の空白には触らない（ADR-0030）。
- * `<template>` の中身は探さない。式の評価の後に呼ぶので、残る `<template>` はブラウザにとって不活性なものだけである。
+ * `indent` は移した資産の前に置く `<head>` の字下げで、`appendToHead` に渡す。描画で `<head>` の子が消える前に `headIndent` で求めておく。
+ * 素の `<template>` の中身は探さない。式の評価の後に呼ぶので、残る `<template>` は素のものだけである。
  */
-export function aggregate(document: Document): void {
+export function aggregate(document: Document, indent: string | undefined): void {
   const head = findFirst(document, "head");
   if (!head) return;
-  // 字下げは、移動で `<head>` の先頭の要素が動く前に求める
-  const indent = headIndent(head);
   const seen = new Set<string>();
-  for (const el of findAllOutsideTemplates(document, (e) => assetKey(e) !== undefined)) {
+  for (const el of findAllOutsideInertTemplates(document, (e) => assetKey(e) !== undefined)) {
     const key = assetKey(el)!;
     if (seen.has(key)) {
       detachWithIndent(el);

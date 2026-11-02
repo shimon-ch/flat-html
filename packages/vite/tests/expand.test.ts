@@ -95,3 +95,10 @@ test("評価されない分岐の式の構文エラーも、テンプレート�
   await expect(promise).rejects.toBeInstanceOf(TemplateError);
   await expect(promise).rejects.toThrow(/^templates\/x\.html:3: /);
 });
+
+test("<template html> の中身は描画で捨てられるので、式として構文解析しない", async () => {
+  const html = await expand('<flat-x h="<b>r</b>"></flat-x>', {
+    x: '<div><template html="h">{{ a( }}</template></div>',
+  });
+  expect(html).toBe('<div data-flat="x"><b>r</b></div>');
+});

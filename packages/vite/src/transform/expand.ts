@@ -13,7 +13,7 @@ import {
   type ParentNode,
 } from "./dom.ts";
 import { Scope } from "./evaluator.ts";
-import { referencedNames, render } from "./render.ts";
+import { referencedNames, render, type ExpressionCache, type RenderContext } from "./render.ts";
 import { distribute, rootElements } from "./slots.ts";
 import { parseFragmentSource, unmarkBraces } from "./source.ts";
 import { TemplateError, type TemplateSource, type TransformOptions } from "./types.ts";
@@ -26,6 +26,10 @@ export interface ExpandContext {
   resolveAsset: TransformOptions["resolveAsset"];
   /** 走査している入力のファイルパス。書いたファイルの記録がないノードのエラー表示に使う */
   path: string | undefined;
+  /** 構文解析した式の控え。1 回の変換の中で共有する */
+  expressions: ExpressionCache;
+  /** テンプレートのパスから、そのテンプレートが式で使う名前（`referencedNames`）を引く控え。1 回の変換の中で共有する */
+  referenced: Map<string, ReadonlySet<string>>;
 }
 
 const PREFIX = "flat-";
@@ -60,6 +64,22 @@ export async function expandReferences(
 }
 
 /**
+ * テンプレート `fragment` が式で使う名前を返す。描画より前に呼ぶ。
+ * 同じパス（`renderContext.path`）のテンプレートは、1 回の変換の中で 1 回だけ数え、`cache` の結果を使い回す。
+ */
+function namesUsedBy(
+  fragment: ParentNode,
+  renderContext: RenderContext & { path: string },
+  cache: ExpandContext["referenced"],
+): ReadonlySet<string> {
+  const cached = cache.get(renderContext.path);
+  if (cached !== undefined) return cached;
+  const names = referencedNames(fragment, renderContext);
+  cache.set(renderContext.path, names);
+  return names;
+}
+
+/**
  * 参照タグ `el` を 1 つ展開し、置き換えるノードを返す。
  * テンプレートの字面で式に使われない引数は、資産でない根要素へ透過する（ADR-0010 / ADR-0033）。
  * 資産の要素（ADR-0023）は、透過する引数のうち `slot` だけを受け取り、根要素と同じ差し込み先へ入る（ADR-0033）。
@@ -81,8 +101,9 @@ async function expandOne(
   const fragment = parseFragmentSource(template.source, template.path);
   if (ctx.resolveAsset) await resolveAssetUrls(fragment, template.path, ctx.resolveAsset);
   const args = Object.fromEntries(el.attrs.map((a) => [a.name, unmarkBraces(a.value)]));
-  const used = referencedNames(fragment, template.path);
-  render(fragment, new Scope(args), template.path);
+  const renderContext = { path: template.path, expressions: ctx.expressions };
+  const used = namesUsedBy(fragment, renderContext, ctx.referenced);
+  render(fragment, new Scope(args), renderContext);
   await expandReferences(fragment, { ...ctx, path: template.path }, [...stack, name]);
   distribute(fragment, childrenOf(el));
 

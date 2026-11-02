@@ -48,8 +48,15 @@ export function detach(node: ChildNode): void {
   defaultTreeAdapter.detachNode(node);
 }
 
-/** `target` の直前に `nodes` を移し、`target` を取り除く。`nodes` は元の親から外される。 */
+/**
+ * `target` の直前に `nodes` を移し、`target` を取り除く。`nodes` は元の親から外される。
+ * `nodes` が空なら、`target` を `detachWithIndent` で外す。`<head>` に空行を残さないため（ADR-0030）。
+ */
 export function replaceWith(target: ChildNode, nodes: readonly ChildNode[]): void {
+  if (nodes.length === 0) {
+    detachWithIndent(target);
+    return;
+  }
   const parent = target.parentNode;
   if (!parent) return;
   for (const node of nodes) {
@@ -164,17 +171,9 @@ export function findAll(root: ParentNode, match: (el: Element) => boolean): Elem
   return collect(root, match, () => false);
 }
 
-/** 条件に合う要素を文書順に集める。どの `<template>` の中身にも入らない。 */
-export function findAllOutsideTemplates(
-  root: ParentNode,
-  match: (el: Element) => boolean,
-): Element[] {
-  return collect(root, match, isTemplate);
-}
-
 /**
  * 条件に合う要素を文書順に集める。素の `<template>`（`isInertTemplate`）の中身には入らず、
- * `<template if/each/html>` の中身には入る。式の評価より前の木を探すときに使う。
+ * `<template if/each/html>` の中身には入る。
  */
 export function findAllOutsideInertTemplates(
   root: ParentNode,

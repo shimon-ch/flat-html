@@ -44,15 +44,22 @@ function mergeAttrs(target: Element, source: Element): void {
 }
 
 /**
- * ページとレイアウトの `<head>` にまたがって、条件に合う要素を 1 つだけ残す。ページ側の先頭が優先（ADR-0023）。
+ * ページとレイアウトの `<head>` にまたがって、条件に合う要素を 1 つだけ残す（ADR-0023 / ADR-0032）。
  * 候補は式の評価より前に探すので、素の `<template>` の中は数えず、`<template if/each/html>` の中は数える。
+ * 残す要素は、ページの `<head>` の直下にある最初の候補、ページ側の最初の候補、レイアウトの `<head>` の直下にある最初の候補、
+ * レイアウト側の最初の候補の順に、最初に見つかったもの。`<template if/each/html>` の中の候補は式の評価で消えうるため、直下の候補を先に選ぶ。
  * 残すページ側の要素が `<head>` の直下にあり、レイアウトの `<head>` の直下にも同じ種類の要素があれば、
  * ページ側の要素をその最初の要素の位置へ移す（ADR-0032）。その位置の直前の空白はそのまま使う。
  * `<template if/each/html>` の中の要素は位置の基準にしない。
  */
 function keepOne(pageHead: Element, layoutHead: Element, match: (el: Element) => boolean): void {
+  const fromPage = findAllOutsideInertTemplates(pageHead, match);
   const fromLayout = findAllOutsideInertTemplates(layoutHead, match);
-  const [kept, ...others] = [...findAllOutsideInertTemplates(pageHead, match), ...fromLayout];
+  const kept =
+    fromPage.find((el) => el.parentNode === pageHead) ??
+    fromPage[0] ??
+    fromLayout.find((el) => el.parentNode === layoutHead) ??
+    fromLayout[0];
   if (kept === undefined) return;
   const position =
     kept.parentNode === pageHead
@@ -62,7 +69,9 @@ function keepOne(pageHead: Element, layoutHead: Element, match: (el: Element) =>
     detachWithIndent(kept);
     replaceWith(position, [kept]);
   }
-  for (const el of others) if (el !== position) detachWithIndent(el);
+  for (const el of [...fromPage, ...fromLayout]) {
+    if (el !== kept && el !== position) detachWithIndent(el);
+  }
 }
 
 const isMetaCharset = (el: Element): boolean =>

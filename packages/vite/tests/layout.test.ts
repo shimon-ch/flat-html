@@ -358,6 +358,21 @@ test("レイアウトの <template if> の中の <title> も重複除去の候�
   }
 });
 
+test("ページの <template if> の中の <title> より、ページの <head> の直下の <title> を残す", async () => {
+  const result = await page(
+    '<!doctype html><html><head><link rel="layout" href="base.html">' +
+      '<template if="x"><title>A</title></template><title>B</title></head><body></body></html>',
+    {
+      data: { x: false },
+      resolveLayout: layouts({
+        "base.html":
+          "<!doctype html><html><head><title>Base</title></head><body><slot></slot></body></html>",
+      }),
+    },
+  );
+  expect(headOf(result.html)).toBe("<head><title>B</title></head>");
+});
+
 test("レイアウトの <head> の直下に同じ種類がなければ、ページの要素は <template if> の中へ入れず末尾へ入れる", async () => {
   for (const x of [true, false]) {
     expect(

@@ -62,6 +62,24 @@ test("<head> の <template if> が偽、<template each> が空で消えるとき
   expect(headOf(result.html)).toBe(lines("<head>", "    <title>t</title>", "  </head>"));
 });
 
+test("<head> の <template html> の結果が空、<template if> が真で中身が空のとき、空行を残さない", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      "    <title>t</title>",
+      '    <template html="raw"></template>',
+      '    <template if="dev"></template>',
+      "  </head>",
+      "  <body></body>",
+      "</html>",
+    ),
+    { data: { raw: "", dev: true } },
+  );
+  expect(headOf(result.html)).toBe(lines("<head>", "    <title>t</title>", "  </head>"));
+});
+
 test("関数呼び出し・算術・代入は構文エラーとしてパスと行つきで失敗する", async () => {
   for (const expr of ["f()", "a + 1", "a = 1", "a.b[0]"]) {
     const promise = expand(`<p>\n\n{{ ${expr} }}</p>`, {});

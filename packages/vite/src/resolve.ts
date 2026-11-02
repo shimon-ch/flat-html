@@ -1,5 +1,4 @@
-import { access, readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { TemplateSource } from "./transform/index.ts";
 
@@ -44,31 +43,47 @@ export function resolveLayoutFile(
   return readIfExists(file);
 }
 
-async function exists(file: string): Promise<boolean> {
+async function isFile(file: string): Promise<boolean> {
   try {
-    await access(file);
-    return true;
+    return (await stat(file)).isFile();
   } catch {
     return false;
   }
 }
 
 /**
- * テンプレートやレイアウトに書かれた資産の指定子を、そのファイル `fromPath` の位置を基準に実ファイルへ解決する。
- * `./` `../` で始まる相対パスはファイルシステムで、それ以外（`@scope/pkg/path`、`pkg/path`）は
- * `fromPath` から見た Node の解決規則で探す。見つからなければ null。
+ * パッケージ名の指定子 `id` を、ファイル `importer` から見て解決し、解決先のパスを返す。見つからなければ `undefined`。
+ * プラグインは Vite の解決器（`config.createResolver()`）を渡す。
+ */
+export type ResolvePackage = (id: string, importer: string) => Promise<string | undefined>;
+
+/** 資産の指定子を解決した結果。 */
+export interface AssetFile {
+  /** 実在するファイルの絶対パス */
+  file: string;
+  /** 指定子の最初の `?` か `#` から後ろ。どちらもなければ空文字 */
+  suffix: string;
+}
+
+/**
+ * テンプレートやレイアウトに書かれた資産の指定子を、そのファイル `fromPath` の位置を基準に実ファイルへ解決する（ADR-0034）。
+ * 指定子の最初の `?` か `#` から後ろは外して解決し、`suffix` として返す。URL を作るときに付け直す。
+ * `./` `../` で始まる相対パスはファイルシステムで、それ以外（`@scope/pkg/path`、`pkg/path`、Vite の別名）は
+ * `resolvePackage` で探す。解決先が実在するファイルでなければ null。
  */
 export async function resolveAssetFile(
   fromPath: string,
   specifier: string,
-): Promise<string | null> {
-  if (specifier.startsWith("./") || specifier.startsWith("../")) {
-    const file = path.resolve(path.dirname(fromPath), specifier);
-    return (await exists(file)) ? file : null;
-  }
-  try {
-    return createRequire(fromPath).resolve(specifier);
-  } catch {
-    return null;
-  }
+  resolvePackage: ResolvePackage,
+): Promise<AssetFile | null> {
+  const end = specifier.search(/[?#]/);
+  const id = end === -1 ? specifier : specifier.slice(0, end);
+  const suffix = end === -1 ? "" : specifier.slice(end);
+  const file =
+    id.startsWith("./") || id.startsWith("../")
+      ? path.resolve(path.dirname(fromPath), id)
+      : await resolvePackage(id, fromPath).catch(() => undefined);
+  return file !== undefined && path.isAbsolute(file) && (await isFile(file))
+    ? { file, suffix }
+    : null;
 }

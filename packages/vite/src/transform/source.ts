@@ -26,6 +26,8 @@ const MARKER = /[\uFDD0\uFDD1]/;
 const OPEN_REFERENCE = /&(?:#0*123(?![0-9])|#[xX]0*7[bB](?![0-9a-fA-F]));?|&(?:lbrace|lcub);/g;
 /** `}` を表す文字参照。形の扱いは `OPEN_REFERENCE` と同じ。 */
 const CLOSE_REFERENCE = /&(?:#0*125(?![0-9])|#[xX]0*7[dD](?![0-9a-fA-F]));?|&(?:rbrace|rcub);/g;
+/** `OPEN_REFERENCE` か `CLOSE_REFERENCE` に当たる文字参照。ソースが 1 つも含まないかを確かめるのに使う。 */
+const BRACE_REFERENCE = new RegExp(`${OPEN_REFERENCE.source}|${CLOSE_REFERENCE.source}`);
 
 /** `source` の `index` 文字目の行番号。parse5 と同じく `\r\n`、`\r`、`\n` をそれぞれ 1 つの改行と数える。 */
 function lineAtOffset(source: string, index: number): number {
@@ -74,6 +76,7 @@ function markBraces(source: string, opaque: ReadonlyArray<readonly [number, numb
  * ページ、レイアウト、テンプレートのソースを解析し、すべてのノードに `path` を記録する（ADR-0035）。
  * 解析で `{` か `}` に戻る文字参照は、`OPEN` と `CLOSE` に置き換えてから解析する。`{{ }}` の区切りとみなさないため。
  * 置き換えるかは、一度そのまま解析した木で決める。コメントと生テキスト要素の中身は、parse5 が文字参照を戻さないので置き換えない。
+ * ソースが波括弧の文字参照を 1 つも含まなければ、そのまま解析した木を返す。
  * ソースが `OPEN` か `CLOSE` を含めば、`path` とその行を添えて `TemplateError` を投げる。
  */
 function parseSource<T extends Document | DocumentFragment>(
@@ -91,7 +94,7 @@ function parseSource<T extends Document | DocumentFragment>(
     );
   }
   const parsed = parseHtml(source);
-  const marked = markBraces(source, opaqueRanges(parsed));
+  const marked = BRACE_REFERENCE.test(source) ? markBraces(source, opaqueRanges(parsed)) : source;
   const root = marked === source ? parsed : parseHtml(marked);
   if (path !== undefined) registerSource(root, path);
   return root;
