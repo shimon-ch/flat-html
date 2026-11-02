@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+import { TemplateError } from "../src/index.ts";
 import {
   assetResolver,
   expand,
@@ -312,6 +313,64 @@ test("テンプレートの素の <template> の中の資産は URL を解決し
       doc(
         '<title>t</title><link rel="stylesheet" href="/fs/templates/on.css">',
         '<div data-flat="a"><template><link rel="stylesheet" href="./inert.css"></template></div>',
+      ),
+    ),
+  );
+});
+
+/** どの指定子も解決できない `resolveAsset`。 */
+const unresolvable = (): Promise<string | null> => Promise.resolve(null);
+
+test("テンプレートのファイルの指定子が解決できなければ、テンプレートのパスと行を添えて例外になる", async () => {
+  const result = page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({
+      a: lines("<div>a</div>", '<link rel="stylesheet" href="./indx.css">'),
+    }),
+    resolveAsset: unresolvable,
+  });
+  await expect(result).rejects.toBeInstanceOf(TemplateError);
+  await expect(result).rejects.toThrow("templates/a.html:2: 資産 ./indx.css が見つからない");
+});
+
+test("レイアウトのファイルの指定子が解決できなければ、レイアウトのパスと行を添えて例外になる", async () => {
+  const result = page(
+    '<!doctype html><html><head><link rel="layout" href="base.html"></head><body></body></html>',
+    {
+      resolveLayout: layouts({
+        "base.html": lines(
+          "<!doctype html>",
+          "<html>",
+          "<head>",
+          '<link rel="stylesheet" href="@scope/missing/index.css">',
+          "</head>",
+          "<body><slot></slot></body>",
+          "</html>",
+        ),
+      }),
+      resolveAsset: unresolvable,
+    },
+  );
+  await expect(result).rejects.toBeInstanceOf(TemplateError);
+  await expect(result).rejects.toThrow(
+    "layouts/base.html:4: 資産 @scope/missing/index.css が見つからない",
+  );
+});
+
+test("/ で始まる URL とスキーム付きの URL は解決を問わないので、解決できなくても例外にならない", async () => {
+  const result = await page(doc("<title>t</title>", "<flat-a></flat-a>"), {
+    resolve: templates({
+      a:
+        '<link rel="stylesheet" href="/root.css">' +
+        '<link rel="stylesheet" href="https://example.com/x.css"><div>a</div>',
+    }),
+    resolveAsset: unresolvable,
+  });
+  expect(squash(result.html)).toBe(
+    squash(
+      doc(
+        '<title>t</title><link rel="stylesheet" href="/root.css">' +
+          '<link rel="stylesheet" href="https://example.com/x.css">',
+        '<div data-flat="a">a</div>',
       ),
     ),
   );

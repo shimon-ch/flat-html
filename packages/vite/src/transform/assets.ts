@@ -6,12 +6,13 @@ import {
   findFirst,
   getAttr,
   headIndent,
+  lineOf,
   setAttr,
   type Document,
   type Element,
   type ParentNode,
 } from "./dom.ts";
-import type { TransformOptions } from "./types.ts";
+import { TemplateError, type TransformOptions } from "./types.ts";
 
 const LINK_RELS = ["stylesheet", "modulepreload", "preload"];
 
@@ -63,6 +64,7 @@ function isFileSpecifier(url: string): boolean {
  * 集約より前に呼ぶ。重複除去の鍵が解決後の URL になり、別々のテンプレートが同じ資産を指しても 1 つにまとまる。
  * 解決は式の評価より前に行うので、URL に `{{ }}` は使えない。
  * 素の `<template>` の中身は不活性なので解決しない（ADR-0023）。`<template if/each/html>` の中身は解決する。
+ * `resolveAsset` が null を返したら、`fromPath` とその要素の行を添えて `TemplateError` を投げる（ADR-0034）。
  */
 export async function resolveAssetUrls(
   root: ParentNode,
@@ -73,7 +75,10 @@ export async function resolveAssetUrls(
     const ref = assetRef(el)!;
     if (!isFileSpecifier(ref.url)) continue;
     const resolved = await resolveAsset(ref.url, fromPath);
-    if (resolved !== null) setAttr(el, ref.attr, resolved);
+    if (resolved === null) {
+      throw new TemplateError(`資産 ${ref.url} が見つからない`, fromPath, lineOf(el));
+    }
+    setAttr(el, ref.attr, resolved);
   }
 }
 

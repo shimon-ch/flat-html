@@ -13,7 +13,8 @@ export interface TransformOptions {
   /**
    * テンプレートやレイアウトに書かれた資産の URL を、解決後の URL に直す。
    * `specifier` は書かれたままの値、`fromPath` はそれが書かれていたファイルのパス。
-   * 触らない場合は null を返す。渡されなければ URL は書き換えられない。
+   * 解決できなければ null を返す。ファイルを指す指定子で null を返すと `TemplateError` になる（ADR-0034）。
+   * 書かれたまま残すなら、`specifier` をそのまま返す。渡されなければ URL は書き換えられない。
    */
   resolveAsset?: (specifier: string, fromPath: string) => Promise<string | null>;
   /** ページに渡すデータ。ページとレイアウトのテンプレートからだけ見える */

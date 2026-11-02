@@ -15,14 +15,22 @@ export interface FlatHtmlOptions {
 }
 
 /**
- * 解決した資産の絶対パスを、Vite が読み込める URL にする。
+ * 解決した資産の絶対パス `file` を、ページのファイル `page` に書く URL にする（ADR-0034）。
  *
- * 開発サーバーでもビルドでも `/@fs/<絶対パス>` の形にする。Vite の root の外にあるファイル
- * （別パッケージのコンポーネントの CSS など）を指せて、開発サーバー（そのまま配信する）と
- * ビルド（import として解決し、ハッシュ付きの資産に出し直す）の両方が受け付ける形のため。
- * `base` は付けない。開発サーバーでは Vite 自身の HTML 変換が `/` で始まる URL に付ける。
+ * ビルド（`command` が `"build"`）では、`page` のディレクトリからの相対パスにし、`./` か `../` で始める。
+ * Vite のビルドは HTML の中の相対 URL をページの位置から解決し、import に変わる資産
+ * （`media` も `disabled` もない `<link rel="stylesheet">` と `<script type="module">`）も、
+ * 変わらない資産（`<link rel="preload">`、`<link rel="modulepreload">`、`media` 付きの `<link rel="stylesheet">`）も、
+ * ハッシュ付きの資産として出し直す。`/@fs/` の URL は後者で解決されず、そのまま出力に残る。
+ *
+ * 開発サーバーでは `/@fs/<絶対パス>` にする。Vite の root の外にあるファイル（別パッケージのコンポーネントの CSS など）を
+ * そのまま配信させるため。`base` は付けない。Vite 自身の HTML 変換が `/` で始まる URL に付ける。
  */
-function assetUrl(file: string): string {
+function assetUrl(file: string, page: string, command: ResolvedConfig["command"]): string {
+  if (command === "build") {
+    const relative = path.relative(path.dirname(page), file).replaceAll(path.sep, "/");
+    return relative.startsWith("../") ? relative : `./${relative}`;
+  }
   return `/@fs/${file.replaceAll(path.sep, "/").replace(/^\//, "")}`;
 }
 
@@ -70,7 +78,7 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
             resolveLayoutFile(config.root, fromPath ?? ctx.filename, href),
           resolveAsset: async (specifier, fromPath) => {
             const file = await resolveAssetFile(fromPath, specifier);
-            return file === null ? null : assetUrl(file);
+            return file === null ? null : assetUrl(file, ctx.filename, config.command);
           },
         });
 
