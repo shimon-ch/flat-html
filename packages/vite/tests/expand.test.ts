@@ -102,3 +102,15 @@ test("<template html> の中身は描画で捨てられるので、式として�
   });
   expect(html).toBe('<div data-flat="x"><b>r</b></div>');
 });
+
+test("別々の参照名が同じパスのテンプレートに解決されても、使った引数はテンプレートのソースごとに数える", async () => {
+  const result = await transform('<flat-a title="A"></flat-a><flat-b title="B"></flat-b>', {
+    resolve: (name) =>
+      Promise.resolve(
+        name === "a"
+          ? { path: "templates/same.html", source: "<p>{{ title }}</p>" }
+          : { path: "templates/same.html", source: "<p>b</p>" },
+      ),
+  });
+  expect(result.html).toBe('<p data-flat="a">A</p><p title="B" data-flat="b">b</p>');
+});

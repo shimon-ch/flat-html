@@ -53,37 +53,25 @@ async function isFile(file: string): Promise<boolean> {
 
 /**
  * パッケージ名の指定子 `id` を、ファイル `importer` から見て解決し、解決先のパスを返す。見つからなければ `undefined`。
+ * 解決できない理由が分かるとき（`exports` にないサブパスなど）は、その理由を文言に持つ例外を投げる。
  * プラグインは Vite の解決器（`config.createResolver()`）を渡す。
  */
 export type ResolvePackage = (id: string, importer: string) => Promise<string | undefined>;
 
-/** 資産の指定子を解決した結果。 */
-export interface AssetFile {
-  /** 実在するファイルの絶対パス */
-  file: string;
-  /** 指定子の最初の `?` か `#` から後ろ。どちらもなければ空文字 */
-  suffix: string;
-}
-
 /**
- * テンプレートやレイアウトに書かれた資産の指定子を、そのファイル `fromPath` の位置を基準に実ファイルへ解決する（ADR-0034）。
- * 指定子の最初の `?` か `#` から後ろは外して解決し、`suffix` として返す。URL を作るときに付け直す。
- * `./` `../` で始まる相対パスはファイルシステムで、それ以外（`@scope/pkg/path`、`pkg/path`、Vite の別名）は
- * `resolvePackage` で探す。解決先が実在するファイルでなければ null。
+ * テンプレートやレイアウトに書かれた資産の指定子を、そのファイル `fromPath` の位置を基準に実ファイルへ解決し、絶対パスを返す（ADR-0034）。
+ * `specifier` はパスの部分だけで、`?` と `#` から後ろを含まない。`transform` が外して渡し、URL に付け直す。
+ * `./` `../` で始まる相対パスはファイルシステムで、それ以外（`@scope/pkg/path`、`pkg/path`、`#` で始まるサブパス、Vite の別名）は
+ * `resolvePackage` で探す。解決先が実在するファイルでなければ null。`resolvePackage` が投げた例外はそのまま投げる。
  */
 export async function resolveAssetFile(
   fromPath: string,
   specifier: string,
   resolvePackage: ResolvePackage,
-): Promise<AssetFile | null> {
-  const end = specifier.search(/[?#]/);
-  const id = end === -1 ? specifier : specifier.slice(0, end);
-  const suffix = end === -1 ? "" : specifier.slice(end);
+): Promise<string | null> {
   const file =
-    id.startsWith("./") || id.startsWith("../")
-      ? path.resolve(path.dirname(fromPath), id)
-      : await resolvePackage(id, fromPath).catch(() => undefined);
-  return file !== undefined && path.isAbsolute(file) && (await isFile(file))
-    ? { file, suffix }
-    : null;
+    specifier.startsWith("./") || specifier.startsWith("../")
+      ? path.resolve(path.dirname(fromPath), specifier)
+      : await resolvePackage(specifier, fromPath);
+  return file !== undefined && path.isAbsolute(file) && (await isFile(file)) ? file : null;
 }

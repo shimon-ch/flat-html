@@ -21,6 +21,13 @@ export const isInertTemplate = (node: Node): boolean =>
   isTemplate(node) && !["if", "each", "html"].some((name) => getAttr(node, name) !== undefined);
 
 /**
+ * `html` を持ち `each` を持たない `<template>`。描画で `html` の値に置き換わり、中身は捨てられる（ADR-0033）。
+ * 型の絞り込みはしない。偽のときに `<template>` でないとは言えないため。
+ */
+export const discardsContent = (node: Node): boolean =>
+  isTemplate(node) && getAttr(node, "html") !== undefined && getAttr(node, "each") === undefined;
+
+/**
  * 直列化で中身のテキストがエスケープされない要素（`<script>`、`<style>` など）。
  * 判定は parse5 の serialize と同じものを使う。`parse` と `serialize` の既定に合わせ、スクリプトは有効とみなす。
  */
@@ -50,10 +57,13 @@ export function detach(node: ChildNode): void {
 
 /**
  * `target` の直前に `nodes` を移し、`target` を取り除く。`nodes` は元の親から外される。
- * `nodes` が空なら、`target` を `detachWithIndent` で外す。`<head>` に空行を残さないため（ADR-0030）。
+ * `nodes` が空なら、`target` を `detachWithIndent` で外す。
+ * `target` の親が `<head>` で、`nodes` が空白だけのテキストばかりなら、`nodes` を入れずに `target` を `detachWithIndent` で外す。
+ * どちらも `<head>` に空行を残さないため（ADR-0030）。`<head>` の外では、空白だけのテキストもそのまま入れる。
  */
 export function replaceWith(target: ChildNode, nodes: readonly ChildNode[]): void {
-  if (nodes.length === 0) {
+  if (nodes.length === 0 || (isHead(target.parentNode) && nodes.every(isBlankText))) {
+    for (const node of nodes) detach(node);
     detachWithIndent(target);
     return;
   }
@@ -180,6 +190,30 @@ export function findAllOutsideInertTemplates(
   match: (el: Element) => boolean,
 ): Element[] {
   return collect(root, match, isInertTemplate);
+}
+
+/**
+ * 条件に合う要素を文書順に集める。中身が捨てられる `<template>`（`discardsContent`）の中身には入らず、
+ * それ以外の `<template>`（素の `<template>` と `<template if/each>`）の中身には入る。
+ * 描画の前の木で、出力に残りうる要素をすべて探すときに使う。
+ */
+export function findAllOutsideDiscardedContent(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+): Element[] {
+  return collect(root, match, discardsContent);
+}
+
+/**
+ * 条件に合う要素のうち、文書木に入るものを文書順に集める。どの `<template>` の中身にも入らない。
+ * 描画の後の文書に使う。描画の後に残る `<template>` は、素の `<template>`（`<template shadowrootmode>` を含む）と、
+ * `<template html>` の値から生まれたものだけである。どちらも描画を通らず、中身は不活性な中身か影の木になる。
+ */
+export function findAllInDocumentTree(
+  root: ParentNode,
+  match: (el: Element) => boolean,
+): Element[] {
+  return collect(root, match, isTemplate);
 }
 
 export function findFirst(root: ParentNode, tagName: string): Element | undefined {

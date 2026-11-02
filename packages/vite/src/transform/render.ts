@@ -3,6 +3,7 @@ import {
   append,
   childrenOf,
   cloneNode,
+  discardsContent,
   getAttr,
   hasRawText,
   isElement,
@@ -215,7 +216,7 @@ function renderEach(el: Template, source: string, scope: Scope, ctx: RenderConte
  * `root` を `render` したときに式として構文解析される箇所から、パスの先頭の名前を集める（ADR-0033）。
  * 評価されない分岐（偽の `if`、空の `each`、`||` の評価されない側など）の式も数える。
  * `<template if/each/html>` は `if` と `each` の `of` の右辺と `html` の式を数え、中身にも入る。
- * ただし `html` を持ち `each` を持たない `<template>` の中身には入らない。描画で `html` の値に置き換わり、中身は捨てられるため。
+ * ただし `html` を持ち `each` を持たない `<template>`（`discardsContent`）の中身には入らない。描画で `html` の値に置き換わり、中身は捨てられるため。
  * `each` が導入する変数名も、中身の式に現れれば数える。
  * 素の `<template>` の中身と生テキスト要素の中身は `render` が展開しないので数えない。それらの要素自身の属性は数える。
  * 構文の誤りは `render` と同じパスと行の `TemplateError` にする。
@@ -242,7 +243,7 @@ export function referencedNames(root: ParentNode, ctx: RenderContext): Set<strin
           add(splitEach(child, each, ctx.path).listSource, child, lineOf(child));
         const html = getAttr(child, "html");
         if (html !== undefined) add(html, child, lineOf(child));
-        if (html === undefined || each !== undefined) visit(child.content);
+        if (!discardsContent(child)) visit(child.content);
       } else if (isElement(child)) {
         for (const attr of child.attrs) addInterpolations(attr.value, child);
         if (!isTemplate(child) && !hasRawText(child)) visit(child);

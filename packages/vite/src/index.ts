@@ -32,14 +32,19 @@ function isInside(dir: string, file: string): boolean {
 
 /**
  * 解決した資産の絶対パス `file` を、ページのファイル `page` に書く URL にする（ADR-0034）。
- * `page` のディレクトリからの相対パスにでき、かつビルド（`config.command` が `"build"`）か、`file` が `config.root` の中にあるなら、
- * `./` か `../` で始まり `/` で区切る相対パスを返す。
- * それ以外（開発サーバーで root の外にあるとき、ドライブが違って相対パスにできないとき）は `/@fs/<絶対パス>` を返す。
- * どちらにも `base` は付けない（ADR-0034）。
+ * `file` が `config.root` の中にあれば、開発サーバーでもビルドでも、`/` で始まる root からの相対パスを返す。
+ * root の外にあれば、ビルド（`config.command` が `"build"`）では `page` のディレクトリからの、`./` か `../` で始まる相対パスを返す。
+ * 開発サーバーで root の外にあるときと、ドライブが違って相対パスにできないときは `/@fs/<絶対パス>` を返す。
+ * 区切りはどれも `/` で、`base` は付けない（ADR-0034）。
+ * `page` は開発サーバーでは実在するファイルとは限らない（`server.transformIndexHtml('/', html)` では root のディレクトリになる）ので、
+ * 開発サーバーの URL は `page` に頼らない。
  */
 function assetUrl(file: string, page: string, config: ResolvedConfig): string {
+  if (isInside(config.root, file)) {
+    return `/${path.relative(config.root, file).replaceAll(path.sep, "/")}`;
+  }
   const relative = path.relative(path.dirname(page), file);
-  if (!path.isAbsolute(relative) && (config.command === "build" || isInside(config.root, file))) {
+  if (config.command === "build" && !path.isAbsolute(relative)) {
     const url = relative.replaceAll(path.sep, "/");
     return url.startsWith("../") ? url : `./${url}`;
   }
@@ -91,10 +96,8 @@ export function flatHtml(options: FlatHtmlOptions): Plugin {
           resolveLayout: (href, fromPath) =>
             resolveLayoutFile(config.root, fromPath ?? ctx.filename, href),
           resolveAsset: async (specifier, fromPath) => {
-            const asset = await resolveAssetFile(fromPath, specifier, resolvePackage);
-            return asset === null
-              ? null
-              : assetUrl(asset.file, ctx.filename, config) + asset.suffix;
+            const file = await resolveAssetFile(fromPath, specifier, resolvePackage);
+            return file === null ? null : assetUrl(file, ctx.filename, config);
           },
         });
 

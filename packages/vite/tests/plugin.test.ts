@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, realpath, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -9,8 +9,22 @@ import {
   type MinimalPluginContextWithoutEnvironment,
   type Plugin,
 } from "vite";
-import { expect, test } from "vite-plus/test";
+import { afterEach, expect, test } from "vite-plus/test";
 import { flatHtml, TemplateError } from "../src/index.ts";
+
+/** `tempDir` で作ったディレクトリ。各テストの後に消す。 */
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+/** 一時ディレクトリを作り、実パスを返す。テストの後に消す。 */
+async function tempDir(): Promise<string> {
+  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "flat-html-")));
+  tempDirs.push(dir);
+  return dir;
+}
 
 /** `transformIndexHtml` の hook を `{ order, handler }` の形で取り出す。 */
 function hookOf(plugin: Plugin) {
@@ -31,7 +45,7 @@ const pluginContext: MinimalPluginContextWithoutEnvironment = {
 };
 
 async function fixture(): Promise<string> {
-  const root = await realpath(await mkdtemp(path.join(tmpdir(), "flat-html-")));
+  const root = await tempDir();
   await mkdir(path.join(root, "site/components/badge"), { recursive: true });
   await mkdir(path.join(root, "site/components/boxed"), { recursive: true });
   await mkdir(path.join(root, "lib"), { recursive: true });
@@ -125,49 +139,45 @@ async function transformPage(run: PageRun): Promise<string> {
   return result;
 }
 
-/** `fixture()` の `site/index.html` に `<flat-boxed>` を置いて、`command` の設定で変換する。`head` はページの `<head>` の中身。 */
+/**
+ * `fixture()` に `<flat-boxed>` を置いたページを、`command` の設定で変換する。`head` はページの `<head>` の中身。
+ * `page` はページのファイルの、root からの相対パス。空文字なら root のディレクトリそのものを渡す
+ * （開発サーバーの `server.transformIndexHtml('/', html)` が渡す `ctx.filename` と同じ）。
+ */
 async function transformBoxed(
   command: "build" | "serve",
   head = "<title>t</title>",
+  page = "site/index.html",
 ): Promise<string> {
   const root = await fixture();
   return transformPage({
     root,
-    page: path.join(root, "site/index.html"),
+    page: path.join(root, page),
     roots: ["site/components", "lib"],
     command,
     html: `<!doctype html><html><head>${head}</head><body><flat-boxed></flat-boxed></body></html>`,
   });
 }
 
-test("開発サーバーでも、root の中にあるテンプレートの隣の資産はページからの相対 URL へ書き換わり、/ で始まる URL は触られない", async () => {
-  const html = await transformBoxed("serve");
-  expect(html).toBe(
-    '<!DOCTYPE html><html><head><title>t</title><link rel="stylesheet" href="./components/boxed/index.css">' +
-      '<link rel="stylesheet" href="/site.css"></head>' +
-      '<body><div data-flat="boxed">boxed</div></body></html>',
-  );
+/** `transformBoxed` の既定のページの出力。`<flat-boxed>` の資産は root からの `/` で始まる URL になる。 */
+const boxedOutput =
+  '<!DOCTYPE html><html><head><title>t</title><link rel="stylesheet" href="/site/components/boxed/index.css">' +
+  '<link rel="stylesheet" href="/site.css"></head>' +
+  '<body><div data-flat="boxed">boxed</div></body></html>';
+
+test("root の中にあるテンプレートの隣の資産は、開発サーバーでもビルドでも root からの同じ / で始まる URL になり、/ で始まる URL は触られない", async () => {
+  expect(await transformBoxed("serve")).toBe(boxedOutput);
+  expect(await transformBoxed("build")).toBe(boxedOutput);
 });
 
-test("開発サーバーでも、ページが相対 URL で直接書いた資産と、テンプレートが指す同じ資産は 1 つにまとまる", async () => {
-  const html = await transformBoxed(
-    "serve",
-    '<title>t</title><link rel="stylesheet" href="./components/boxed/index.css">',
-  );
-  expect(html).toBe(
-    '<!DOCTYPE html><html><head><title>t</title><link rel="stylesheet" href="./components/boxed/index.css">' +
-      '<link rel="stylesheet" href="/site.css"></head>' +
-      '<body><div data-flat="boxed">boxed</div></body></html>',
-  );
+test("ページが / で始まる URL で直接書いた資産と、テンプレートが指す同じ資産は、開発サーバーでもビルドでも 1 つにまとまる", async () => {
+  const head = '<title>t</title><link rel="stylesheet" href="/site/components/boxed/index.css">';
+  expect(await transformBoxed("serve", head)).toBe(boxedOutput);
+  expect(await transformBoxed("build", head)).toBe(boxedOutput);
 });
 
-test("ビルドでは、テンプレートの隣にある資産はページからの相対 URL へ書き換わり、/ で始まる URL は触られない", async () => {
-  const html = await transformBoxed("build");
-  expect(html).toBe(
-    '<!DOCTYPE html><html><head><title>t</title><link rel="stylesheet" href="./components/boxed/index.css">' +
-      '<link rel="stylesheet" href="/site.css"></head>' +
-      '<body><div data-flat="boxed">boxed</div></body></html>',
-  );
+test("開発サーバーで ctx.filename が root のディレクトリでも（transformIndexHtml('/', html)）、root の中の資産は root からの URL になる", async () => {
+  expect(await transformBoxed("serve", "<title>t</title>", "")).toBe(boxedOutput);
 });
 
 test("テンプレートの資産の指定子が解決できなければ、テンプレートのパスと行を添えて TemplateError になる", async () => {
@@ -207,7 +217,7 @@ test("テンプレートの資産の指定子が解決できなければ、テ�
 });
 
 test("root の外にあるテンプレートの隣の資産は、開発サーバーでは /@fs/ の URL に、ビルドではページからの相対 URL になる", async () => {
-  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "flat-html-")));
+  const dir = await tempDir();
   await mkdir(path.join(dir, "lib/outer"), { recursive: true });
   await writeFile(
     path.join(dir, "lib/outer/index.html"),
@@ -276,7 +286,7 @@ test("パッケージ名の指定子は Vite の解決器で解決され、expor
     '<link rel="stylesheet" href="esm-only/style.css"><div>esm</div>',
   );
   expect(await transformIn(root, "esm")).toBe(
-    '<!DOCTYPE html><html><head><link rel="stylesheet" href="../node_modules/esm-only/dist/style.css"></head>' +
+    '<!DOCTYPE html><html><head><link rel="stylesheet" href="/node_modules/esm-only/dist/style.css"></head>' +
       '<body><div data-flat="esm">esm</div></body></html>',
   );
 });
@@ -289,10 +299,54 @@ test("指定子の ? と # から後ろは外して実在するファイルを�
       '<link rel="stylesheet" href="esm-only/style.css#x"><div>q</div>',
   );
   expect(await transformIn(root, "query")).toBe(
-    '<!DOCTYPE html><html><head><link rel="stylesheet" href="./components/query/a.css?inline">' +
-      '<link rel="preload" href="./components/query/font.woff2?v=1" as="font">' +
-      '<link rel="stylesheet" href="../node_modules/esm-only/dist/style.css#x"></head>' +
+    '<!DOCTYPE html><html><head><link rel="stylesheet" href="/site/components/query/a.css?inline">' +
+      '<link rel="preload" href="/site/components/query/font.woff2?v=1" as="font">' +
+      '<link rel="stylesheet" href="/node_modules/esm-only/dist/style.css#x"></head>' +
       '<body><div data-flat="query">q</div></body></html>',
+  );
+});
+
+test("# で始まる指定子は package.json の imports（Node のサブパス import）で解決され、先頭の # で切らない", async () => {
+  const root = await fixtureWith(
+    "subpath",
+    '<link rel="stylesheet" href="#styles/theme.css"><link rel="preload" href="#styles/theme.css?v=1" as="style">' +
+      "<div>subpath</div>",
+  );
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({ name: "app", type: "module", imports: { "#styles/*": "./src/styles/*" } }),
+  );
+  await mkdir(path.join(root, "src/styles"), { recursive: true });
+  await writeFile(path.join(root, "src/styles/theme.css"), "p { color: red }");
+  expect(await transformIn(root, "subpath")).toBe(
+    '<!DOCTYPE html><html><head><link rel="stylesheet" href="/src/styles/theme.css">' +
+      '<link rel="preload" href="/src/styles/theme.css?v=1" as="style"></head>' +
+      '<body><div data-flat="subpath">subpath</div></body></html>',
+  );
+});
+
+test("文字参照で書いた波括弧を含む資産の URL は、解決した後も式として評価されず、文字参照のまま出る", async () => {
+  const root = await fixtureWith(
+    "braces",
+    '<link rel="stylesheet" href="./&#123;&#123;x&#125;&#125;.css"><div>braces</div>',
+  );
+  await writeFile(path.join(root, "site/components/braces/{{x}}.css"), "p { color: red }");
+  expect(await transformIn(root, "braces")).toBe(
+    '<!DOCTYPE html><html><head><link rel="stylesheet" href="/site/components/braces/&#123;&#123;x&#125;&#125;.css"></head>' +
+      '<body><div data-flat="braces">braces</div></body></html>',
+  );
+});
+
+test("Vite の解決器が解決できない理由を投げたら、その理由を添えて TemplateError になる", async () => {
+  const root = await fixtureWith(
+    "unexported",
+    '<div>unexported</div>\n<link rel="stylesheet" href="esm-only/dist/style.css">',
+  );
+  const template = path.join(root, "site/components/unexported/index.html");
+  const result = transformIn(root, "unexported");
+  await expect(result).rejects.toBeInstanceOf(TemplateError);
+  await expect(result).rejects.toThrow(
+    `${template}:2: 資産 esm-only/dist/style.css を解決できない: "./dist/style.css" is not exported`,
   );
 });
 
@@ -303,7 +357,7 @@ test("Vite の別名（resolve.alias）の指定子は、別名の先の実在�
   );
   const alias = { "@lib": path.join(root, "lib") };
   expect(await transformIn(root, "aliased", alias)).toBe(
-    '<!DOCTYPE html><html><head><link rel="stylesheet" href="../lib/theme.css"></head>' +
+    '<!DOCTYPE html><html><head><link rel="stylesheet" href="/lib/theme.css"></head>' +
       '<body><div data-flat="aliased">aliased</div></body></html>',
   );
 
@@ -370,7 +424,7 @@ function fileContaining(files: Map<string, string>, marker: string): string {
 }
 
 test("ビルドでは、root の中と外のテンプレートの資産 5 種が、どれもハッシュ付きの資産として出力の HTML から指される", async () => {
-  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "flat-html-")));
+  const dir = await tempDir();
   const root = path.join(dir, "site");
   await writeAssetComponent(path.join(root, "components/inner"), "inner");
   await writeAssetComponent(path.join(dir, "lib/outer"), "outer");

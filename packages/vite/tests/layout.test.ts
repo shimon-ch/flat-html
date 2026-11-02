@@ -358,26 +358,109 @@ test("レイアウトの <template if> の中の <title> も重複除去の候�
   }
 });
 
-test("ページの <template if> の中の <title> より、ページの <head> の直下の <title> を残す", async () => {
+test("ページの <title> が複数残れば文書順で先のものを残す。偽の <template if> の中の <title> は候補にならない", async () => {
+  for (const [x, kept] of [
+    [true, "A"],
+    [false, "B"],
+  ] as const) {
+    const result = await page(
+      '<!doctype html><html><head><link rel="layout" href="base.html">' +
+        '<template if="x"><title>A</title></template><title>B</title></head><body></body></html>',
+      {
+        data: { x },
+        resolveLayout: layouts({
+          "base.html":
+            "<!doctype html><html><head><title>Base</title></head><body><slot></slot></body></html>",
+        }),
+      },
+    );
+    expect(headOf(result.html)).toBe(`<head><title>${kept}</title></head>`);
+  }
+});
+
+test("レイアウトの <template if> の中の <title> は、評価の後に残ったときだけ位置の基準になる", async () => {
+  expect(
+    await mergeTitleInto(`<template if="x"><title>A</title></template>${colorScheme}`, { x: true }),
+  ).toBe(`<head><title>P</title>${colorScheme}</head>`);
+  expect(
+    await mergeTitleInto(`<template if="x"><title>A</title></template>${colorScheme}`, {
+      x: false,
+    }),
+  ).toBe(`<head>${colorScheme}<title>P</title></head>`);
+});
+
+/** `<head>` の中身が `pageHead` のページを、`<head>` の中身が `layoutHead` のレイアウトへ合流させ、出力の `<head>` を返す。 */
+async function mergeHeads(
+  pageHead: string,
+  layoutHead: string,
+  data: Record<string, unknown>,
+): Promise<string> {
   const result = await page(
-    '<!doctype html><html><head><link rel="layout" href="base.html">' +
-      '<template if="x"><title>A</title></template><title>B</title></head><body></body></html>',
+    `<!doctype html><html><head><link rel="layout" href="base.html">${pageHead}</head><body></body></html>`,
     {
-      data: { x: false },
+      data,
       resolveLayout: layouts({
-        "base.html":
-          "<!doctype html><html><head><title>Base</title></head><body><slot></slot></body></html>",
+        "base.html": `<!doctype html><html><head>${layoutHead}</head><body><slot></slot></body></html>`,
       }),
     },
   );
-  expect(headOf(result.html)).toBe("<head><title>B</title></head>");
+  return headOf(result.html);
+}
+
+test("ページの <template if> の中にしか <title> がなく、条件が偽なら、レイアウトの <title> が残る", async () => {
+  expect(
+    await mergeHeads(
+      '<template if="t"><title>{{ t }}</title></template>',
+      `<title>Default</title>${colorScheme}`,
+      { t: "" },
+    ),
+  ).toBe(`<head><title>Default</title>${colorScheme}</head>`);
 });
 
-test("レイアウトの <head> の直下に同じ種類がなければ、ページの要素は <template if> の中へ入れず末尾へ入れる", async () => {
-  for (const x of [true, false]) {
+test("ページの <template if> の中の <title> は、条件が真なら、レイアウトの <title> の位置に入る", async () => {
+  expect(
+    await mergeHeads(
+      '<template if="t"><title>{{ t }}</title></template>',
+      `<title>Default</title>${colorScheme}`,
+      { t: "T" },
+    ),
+  ).toBe(`<head><title>T</title>${colorScheme}</head>`);
+});
+
+test("レイアウトが <template if> の真と偽に分けて書いた <title> は、条件の真偽どちらでも 1 つだけ残る", async () => {
+  for (const [x, kept] of [
+    [true, "X"],
+    [false, "NotX"],
+  ] as const) {
     expect(
-      await mergeTitleInto(`<template if="x"><title>A</title></template>${colorScheme}`, { x }),
-    ).toBe(`<head>${colorScheme}<title>P</title></head>`);
+      await mergeHeads(
+        "",
+        '<template if="x"><title>X</title></template><template if="!x"><title>NotX</title></template>' +
+          colorScheme,
+        { x },
+      ),
+    ).toBe(`<head><title>${kept}</title>${colorScheme}</head>`);
+  }
+});
+
+test("多段のレイアウトでは、ページ、内側のレイアウト、外側のレイアウトの順に優先し、外側のレイアウトの位置に入る", async () => {
+  const outer =
+    '<!doctype html><html><head><meta charset="utf-8"><title>Outer</title>' +
+    `${colorScheme}</head><body><slot></slot></body></html>`;
+  const inner =
+    '<!doctype html><html><head><link rel="layout" href="outer.html">' +
+    '<template if="x"><title>Inner</title></template></head><body><slot></slot></body></html>';
+  for (const [x, kept] of [
+    [true, "Inner"],
+    [false, "Outer"],
+  ] as const) {
+    const result = await page(
+      '<!doctype html><html><head><link rel="layout" href="inner.html"></head><body></body></html>',
+      { data: { x }, resolveLayout: layouts({ "inner.html": inner, "outer.html": outer }) },
+    );
+    expect(headOf(result.html)).toBe(
+      `<head><meta charset="utf-8"><title>${kept}</title>${colorScheme}</head>`,
+    );
   }
 });
 

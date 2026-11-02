@@ -28,7 +28,7 @@ export interface ExpandContext {
   path: string | undefined;
   /** 構文解析した式の控え。1 回の変換の中で共有する */
   expressions: ExpressionCache;
-  /** テンプレートのパスから、そのテンプレートが式で使う名前（`referencedNames`）を引く控え。1 回の変換の中で共有する */
+  /** テンプレートのソースの文字列から、そのテンプレートが式で使う名前（`referencedNames`）を引く控え。1 回の変換の中で共有する */
   referenced: Map<string, ReadonlySet<string>>;
 }
 
@@ -64,18 +64,20 @@ export async function expandReferences(
 }
 
 /**
- * テンプレート `fragment` が式で使う名前を返す。描画より前に呼ぶ。
- * 同じパス（`renderContext.path`）のテンプレートは、1 回の変換の中で 1 回だけ数え、`cache` の結果を使い回す。
+ * `source` を解析したテンプレート `fragment` が式で使う名前を返す。描画より前に呼ぶ。
+ * 同じソースの文字列のテンプレートは、1 回の変換の中で 1 回だけ数え、`cache` の結果を使い回す。
+ * パスが同じでもソースが違えば別に数える。
  */
 function namesUsedBy(
+  source: string,
   fragment: ParentNode,
-  renderContext: RenderContext & { path: string },
+  renderContext: RenderContext,
   cache: ExpandContext["referenced"],
 ): ReadonlySet<string> {
-  const cached = cache.get(renderContext.path);
+  const cached = cache.get(source);
   if (cached !== undefined) return cached;
   const names = referencedNames(fragment, renderContext);
-  cache.set(renderContext.path, names);
+  cache.set(source, names);
   return names;
 }
 
@@ -102,7 +104,7 @@ async function expandOne(
   if (ctx.resolveAsset) await resolveAssetUrls(fragment, template.path, ctx.resolveAsset);
   const args = Object.fromEntries(el.attrs.map((a) => [a.name, unmarkBraces(a.value)]));
   const renderContext = { path: template.path, expressions: ctx.expressions };
-  const used = namesUsedBy(fragment, renderContext, ctx.referenced);
+  const used = namesUsedBy(template.source, fragment, renderContext, ctx.referenced);
   render(fragment, new Scope(args), renderContext);
   await expandReferences(fragment, { ...ctx, path: template.path }, [...stack, name]);
   distribute(fragment, childrenOf(el));

@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import { TemplateError } from "../src/index.ts";
-import { expand, headOf, layouts, lines, page } from "./helpers.ts";
+import { expand, headOf, layouts, lines, page, templates } from "./helpers.ts";
 
 test("{{ }} はテキストと属性値で使え、常に HTML エスケープされる", async () => {
   const html = await expand('<p title="{{ t }}">{{ t }}</p>', {}, { t: '<b>"&' });
@@ -78,6 +78,36 @@ test("<head> の <template html> の結果が空、<template if> が真で中身
     { data: { raw: "", dev: true } },
   );
   expect(headOf(result.html)).toBe(lines("<head>", "    <title>t</title>", "  </head>"));
+});
+
+test("<head> の <template if> の中の参照が空白だけを出すとき、空行を残さない", async () => {
+  const result = await page(
+    lines(
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      "    <title>t</title>",
+      '    <template if="dev"><flat-empty></flat-empty></template>',
+      "  </head>",
+      "  <body></body>",
+      "</html>",
+    ),
+    {
+      data: { dev: true },
+      resolve: templates({ empty: '<template if="show"><meta name="x"></template>\n' }),
+    },
+  );
+  expect(headOf(result.html)).toBe(lines("<head>", "    <title>t</title>", "  </head>"));
+});
+
+test("<body> では、参照が空白だけを出しても、その空白を残す", async () => {
+  const result = await page(
+    "<!doctype html><html><head></head><body><p>a</p><flat-empty></flat-empty><p>b</p></body></html>",
+    { resolve: templates({ empty: '<template if="show"><i>x</i></template>\n' }) },
+  );
+  expect(result.html).toBe(
+    "<!DOCTYPE html><html><head></head><body><p>a</p>\n<p>b</p></body></html>",
+  );
 });
 
 test("関数呼び出し・算術・代入は構文エラーとしてパスと行つきで失敗する", async () => {

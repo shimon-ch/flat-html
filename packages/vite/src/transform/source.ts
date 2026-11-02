@@ -123,3 +123,11 @@ export function serializeOutput(root: Document | DocumentFragment): string {
 export function unmarkBraces(value: string): string {
   return value.replaceAll(OPEN, "{").replaceAll(CLOSE, "}");
 }
+
+/**
+ * `{` と `}` をすべて `OPEN` と `CLOSE` にする。`unmarkBraces` の逆。
+ * 値として使った文字列から作った値（解決した資産の URL）を木へ書き戻すときに通し、`{{ }}` の区切りとみなさせない。
+ */
+export function markValueBraces(value: string): string {
+  return value.replaceAll("{", OPEN).replaceAll("}", CLOSE);
+}
