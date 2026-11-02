@@ -1,9 +1,10 @@
 import {
-  append,
-  detach,
+  appendToHead,
+  detachWithIndent,
   findAll,
   findFirst,
   getAttr,
+  headIndent,
   setAttr,
   type Document,
   type Element,
@@ -77,18 +78,21 @@ export async function resolveAssetUrls(
 /**
  * 文書中の資産（`<link rel="stylesheet|modulepreload|preload">` と `src` 付き `<script type="module">`）を
  * 文書順のまま `<head>` の末尾へ移し、同じ種類と URL のものは最初の 1 つだけ残す。`<head>` がなければ何もしない。
+ * `<head>` の中の空白は要素と一緒に動かし、`<body>` の空白には触らない（ADR-0030）。
  */
 export function aggregate(document: Document): void {
   const head = findFirst(document, "head");
   if (!head) return;
+  // 字下げは、移動で `<head>` の先頭の要素が動く前に求める
+  const indent = headIndent(head);
   const seen = new Set<string>();
   for (const el of findAll(document, (e) => assetKey(e) !== undefined)) {
     const key = assetKey(el)!;
     if (seen.has(key)) {
-      detach(el);
+      detachWithIndent(el);
       continue;
     }
     seen.add(key);
-    append(head, el);
+    appendToHead(head, el, indent);
   }
 }

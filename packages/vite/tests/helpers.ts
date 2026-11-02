@@ -56,6 +56,18 @@ export function page(
   return transform(html, { resolve: templates({}), path: "page.html", ...options });
 }
 
+/** 行を改行でつなぐ。整形された HTML を書くのに使う。 */
+export function lines(...rows: string[]): string {
+  return rows.join("\n");
+}
+
+/** 出力の `<head>` から `</head>` までを、空白を含めて書かれたまま取り出す。 */
+export function headOf(html: string): string {
+  const match = /<head>.*<\/head>/s.exec(html);
+  if (!match) throw new Error("<head> がない");
+  return match[0];
+}
+
 /** 空白を潰し、doctype の大文字小文字を揃えて比較しやすくする。 */
 export function squash(html: string): string {
   return html
